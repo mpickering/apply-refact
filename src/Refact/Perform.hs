@@ -52,11 +52,11 @@ runRefactoring (as,sk) m ModifyComment{..} =
           , annPriorComments = map (first change) annPriorComments }
       changeComment (AnnComment d, dp) = (AnnComment (change d), dp)
       changeComment e = e
-      change old@Comment{..}= if (ss2pos commentIdentifier) == (ss2pos commentLocation)
+      change old@Comment{..}= if ss2pos commentIdentifier == ss2pos commentLocation
                                           then old { commentContents = newComment}
                                           else old
 runRefactoring as m Delete{position} =
-  ((as, doDelete ((/= position) . getLoc) m))
+  (as, doDelete ((/= position) . getLoc) m)
 runRefactoring as m Rename{nameSubts} =
   (as, doRename nameSubts m)
 runRefactoring as m InsertComment{..} =
@@ -82,12 +82,12 @@ stmtSub _ _ e = return e
 
 patSub :: Module -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
 patSub m subs old@(GHC.L _ (VarPat name)) =
-  (resolveRdrName (findPat m) old subs name)
+  resolveRdrName (findPat m) old subs name
 patSub _ _ e = return e
 
 typeSub :: Module -> [(String, GHC.SrcSpan)] -> Type -> M Type
 typeSub m subs old@(GHC.L _ (HsTyVar name)) =
-  (resolveRdrName (findType m) old subs name)
+  resolveRdrName (findType m) old subs name
 typeSub _ _ e = return e
 
 exprSub :: Module -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
@@ -97,7 +97,7 @@ exprSub _ _ e = return e
 
 identSub :: Module -> [(String, GHC.SrcSpan)] -> Name -> M Name
 identSub m subs old@(GHC.L _ name) =
-  (resolveRdrName' subst (findName m) old subs name)
+  resolveRdrName' subst (findName m) old subs name
   where
     subst :: Name -> (Name, Pat) -> M Name
     subst (mkAnnKey -> oldkey) (n, p)
@@ -110,7 +110,7 @@ resolveRdrName' g f old subs name =
   case name of
     -- Todo: this should replace anns as well?
     GHC.Unqual (GHC.occNameString . GHC.occName -> oname)
-      -> case (lookup oname subs) of
+      -> case lookup oname subs of
               Just (f -> new) -> g old new
               Nothing -> return old
     _ -> return old
@@ -147,7 +147,7 @@ replaceWorker :: (Annotate a) => Anns -> Module
               -> Refactoring GHC.SrcSpan -> (Anns, Module)
 replaceWorker as m p r Replace{..} =
   let replExprLocation = expr
-      (newanns, template) = case (unsafePerformIO $ p orig) of
+      (newanns, template) = case unsafePerformIO $ p orig of
                               Right xs -> xs
                               Left err -> error (show err)
       relat = relativiseApiAnns template newanns
