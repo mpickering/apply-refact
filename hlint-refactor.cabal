@@ -47,4 +47,5 @@ executable refactor
                , mtl
                , process
                , directory
+               , optparse-applicative
 
