@@ -50,3 +50,34 @@ executable refactor
                , directory
                , optparse-applicative
 
+Test-Suite test
+  type:                exitcode-stdio-1.0
+  hs-source-dirs:      tests
+  main-is:             Test.hs
+  other-modules:      Common
+  GHC-Options:         -threaded
+  Default-language:    Haskell2010
+  if impl (ghc < 7.10)
+      buildable: False
+  Build-depends:       hunit
+                     , base < 5
+
+executable roundtrip
+  main-is: Roundtrip.hs
+  hs-source-dirs: tests
+  default-language:    Haskell2010
+  if impl (ghc < 7.10)
+      buildable: False
+  build-depends:
+                 HUnit
+               , base
+               , filepath
+               , containers
+               , mtl
+               , ghc-exactprint
+               , process
+               , filemanip
+               , directory
+               , Diff
+  ghc-options:
+    -threaded
