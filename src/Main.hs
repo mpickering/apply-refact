@@ -19,12 +19,17 @@ import Refact.Utils (toGhcSrcSpan)
 
 import Options.Applicative
 import Data.Maybe
+import Data.List
 
 import System.Process
 import System.Directory
 import System.IO
 
-data Verbosity = Silent | Normal | Loud
+import Control.Monad
+
+import Debug.Trace
+
+data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
 parseVerbosity :: Monad m => String -> m Verbosity
 parseVerbosity s =
@@ -99,21 +104,29 @@ main = do
 
 runPipe :: FilePath -> Options -> IO ()
 runPipe file Options{..} = do
+  let verb = optionsVerbosity
   path <- canonicalizePath file
+  when (verb == Loud) (traceM $ "Getting hints from " ++ path)
   rawhints <- getHints path
+  when (verb == Loud) (traceM $ "Got raw hints")
   let inp :: [Refactoring R.SrcSpan] = read rawhints
-  print inp
+      n = length inp
+  when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let inp' = fmap (toGhcSrcSpan file) <$> inp
+  when (verb == Loud) (traceM $ "Parsing module")
   (anns, m) <- either (error . show) id <$> parseModule file
+  traceM "Applying hints"
   let as = relativiseApiAnns m anns
       -- need a check here to avoid overlap
-  let    (ares, res) = foldl (uncurry runRefactoring) (as, m) inp'
-         output = exactPrintWithAnns res ares
+      (ares, res) = foldl' (uncurry runRefactoring) (as, m) inp'
+      output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
            Nothing -> putStrLn output
-           Just f  -> writeFile f output
+           Just f  -> do
+            when (verb == Loud) (traceM $ "Writing result to " ++ f)
+            writeFile f output
 
 -- Run HLint to get the commands
 
