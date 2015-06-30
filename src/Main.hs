@@ -68,6 +68,7 @@ options =
            <> value Normal
            <> help "Enable verbose mode")
 
+optionsWithHelp :: ParserInfo Options
 optionsWithHelp
   = info (helper <*> options)
           ( fullDesc
