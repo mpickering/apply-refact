@@ -57,8 +57,8 @@ runRefactoring (as,sk) m ModifyComment{..} =
                                           else old
 runRefactoring as m Delete{position} =
   (as, doDelete ((/= position) . getLoc) m)
-runRefactoring as m Rename{nameSubts} =
-  (as, doRename nameSubts m)
+runRefactoring as m Rename{nameSubts} = (as, m)
+  --(as, doRename nameSubts m)
 runRefactoring as m InsertComment{..} =
   let expr = mkAnnKey (findDecl m commentCarrier) in
   (first (insertComment expr newComment) as, m)
