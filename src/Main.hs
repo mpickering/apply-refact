@@ -140,6 +140,8 @@ getHints file = do
                                 (shell (makeCmd file))
                                 { std_out = CreatePipe }
                               )
+  r <- hGetContents hOut
+  return $! last r
   () <$ waitForProcess hProc
-  hGetContents hOut
+  return r
 
