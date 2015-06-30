@@ -11,7 +11,6 @@
 module Main where
 
 import Language.Haskell.GHC.ExactPrint hiding (Parser)
-import Language.Haskell.GHC.ExactPrint.Types
 
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
@@ -19,8 +18,8 @@ import Refact.Perform
 import Refact.Utils (toGhcSrcSpan)
 
 import Options.Applicative
+import Data.Maybe
 
-import System.Environment
 import System.Process
 import System.Directory
 import System.IO
@@ -84,32 +83,27 @@ main = do
   case optionsTarget of
     Nothing -> do
       (fp, hin) <- openTempFile "./" "stdin"
-      getContents >>= hPutStrLn hin
-      runPipe optionsOverwrite fp
+      getContents >>= hPutStrLn hin >> hClose hin
+      runPipe fp o
       removeFile fp
-    Just target -> runPipe optionsOverwrite target
-
-
+    Just target -> runPipe target o
 
 
 -- Pipe
 
-runPipe :: Bool -> FilePath -> IO ()
-runPipe overwrite file = do
+runPipe :: FilePath -> Options -> IO ()
+runPipe file Options{..} = do
   path <- canonicalizePath file
   rawhints <- getHints path
   let inp :: [Refactoring R.SrcSpan] = read rawhints
   print inp
   let inp' = fmap (toGhcSrcSpan file) <$> inp
   (anns, m) <- either (error . show) id <$> parseModule file
-  putStrLn (showGhc anns)
   let as = relativiseApiAnns m anns
       -- need a check here to avoid overlap
   let    (ares, res) = foldl (uncurry runRefactoring) (as, m) inp'
---  putStrLn $ showGhc (Map.toAscList (fst as))
---  putStrLn $ showGhc (Map.toAscList (fst ares))
          output = exactPrintWithAnns res ares
-  if overwrite
+  if optionsOverwrite && isJust optionsTarget
     then writeFile file output
     else putStrLn output
 
