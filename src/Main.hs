@@ -82,7 +82,11 @@ main :: IO ()
 main = do
   o@Options{..} <- execParser optionsWithHelp
   case optionsTarget of
-    Nothing -> error "to implement"
+    Nothing -> do
+      (fp, hin) <- openTempFile "./" "stdin"
+      getContents >>= hPutStrLn hin
+      runPipe optionsOverwrite fp
+      removeFile fp
     Just target -> runPipe optionsOverwrite target
 
 
