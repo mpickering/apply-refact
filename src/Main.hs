@@ -38,7 +38,8 @@ data Target = StdIn | File FilePath
 
 data Options = Options
   { optionsTarget :: Maybe FilePath -- ^ Where to process hints
-  , optionsOverwrite :: Bool -- ^ Whether to overwrite the file inplace
+  , optionsInplace :: Bool
+  , optionsOutput :: Maybe FilePath -- ^ Whether to overwrite the file inplace
   , optionsSuggestions :: Bool -- ^ Whether to perform suggestions
   , optionsHlintOptions :: String -- ^ Commands to pass to hlint
   , optionsVerbosity :: Verbosity
@@ -52,6 +53,11 @@ options =
     switch (long "inplace"
            <> short 'i'
            <> help "Whether to overwrite the target inplace")
+    <*>
+    optional (strOption (long "output"
+                        <> short 'o'
+                        <> help "Name of the file to output to"
+                        <> metavar "FILE"))
     <*>
     switch (long "replace-suggestions"
            <> help "Whether to process suggestions as well as errors")
@@ -103,9 +109,11 @@ runPipe file Options{..} = do
       -- need a check here to avoid overlap
   let    (ares, res) = foldl (uncurry runRefactoring) (as, m) inp'
          output = exactPrintWithAnns res ares
-  if optionsOverwrite && isJust optionsTarget
+  if optionsInplace && isJust optionsTarget
     then writeFile file output
-    else putStrLn output
+    else case optionsOutput of
+           Nothing -> putStrLn output
+           Just f  -> writeFile f output
 
 -- Run HLint to get the commands
 
