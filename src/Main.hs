@@ -15,7 +15,8 @@ import Language.Haskell.GHC.ExactPrint hiding (Parser)
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 import Refact.Perform
-import Refact.Utils (toGhcSrcSpan)
+import Refact.Utils (toGhcSrcSpan, Module)
+import qualified SrcLoc as GHC
 
 import Options.Applicative
 import Data.Maybe
@@ -48,6 +49,7 @@ data Options = Options
   , optionsSuggestions :: Bool -- ^ Whether to perform suggestions
   , optionsHlintOptions :: String -- ^ Commands to pass to hlint
   , optionsVerbosity :: Verbosity
+  , optionsStep :: Bool -- ^ Ask before applying each hint
   }
 
 options :: Parser Options
@@ -77,6 +79,9 @@ options =
            <> short 'v'
            <> value Normal
            <> help "Enable verbose mode")
+    <*>
+    switch (short 's'
+           <> help "Ask before applying each hint")
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
@@ -103,23 +108,25 @@ main = do
 -- Pipe
 
 runPipe :: FilePath -> Options -> IO ()
-runPipe file Options{..} = do
+runPipe file o@Options{..} = do
   let verb = optionsVerbosity
   path <- canonicalizePath file
   when (verb == Loud) (traceM $ "Getting hints from " ++ path)
   rawhints <- getHints path
   when (verb == Loud) (traceM $ "Got raw hints")
-  let inp :: [Refactoring R.SrcSpan] = read rawhints
+  let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
-  let inp' = fmap (toGhcSrcSpan file) <$> inp
+  let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
   when (verb == Loud) (traceM $ "Parsing module")
   (anns, m) <- either (error . show) id <$> parseModule file
   traceM "Applying hints"
   let as = relativiseApiAnns m anns
       -- need a check here to avoid overlap
-      (ares, res) = foldl' (uncurry runRefactoring) (as, m) inp'
-      output = exactPrintWithAnns res ares
+  (ares, res) <- if optionsStep
+                   then foldM (uncurry refactoringLoop) (as, m) refacts
+                   else return $ foldl' (uncurry runRefactoring) (as, m) (concatMap snd refacts)
+  let output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
@@ -127,6 +134,21 @@ runPipe file Options{..} = do
            Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
             writeFile f output
+
+refactoringLoop :: Anns -> Module -> (String, [Refactoring GHC.SrcSpan])
+                -> IO (Anns, Module)
+refactoringLoop as m (desc, rs) =
+  do putStrLn desc
+     putStrLn "Apply hint [y, N]"
+     inp <- getLine
+     case inp of
+          "y" -> return $ foldl' (uncurry runRefactoring) (as, m) rs
+          _   -> do putStrLn "Skipping hint"
+                    return (as, m)
+
+
+
+
 
 -- Run HLint to get the commands
 
