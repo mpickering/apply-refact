@@ -49,6 +49,8 @@ executable refactor
                , process
                , directory
                , optparse-applicative
+               , filemanip
+               , unix-compat
 
 Test-Suite test
   type:                exitcode-stdio-1.0

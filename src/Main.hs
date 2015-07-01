@@ -20,13 +20,16 @@ import qualified SrcLoc as GHC
 
 import Options.Applicative
 import Data.Maybe
-import Data.List
+import Data.List hiding (find)
 
 import System.Process
 import System.Directory
 import System.IO
+import System.FilePath.Find
+import qualified System.PosixCompat.Files as F
 
 import Control.Monad
+
 
 import Debug.Trace
 
@@ -100,15 +103,45 @@ main = do
     Nothing -> do
       (fp, hin) <- openTempFile "./" "stdin"
       getContents >>= hPutStrLn hin >> hClose hin
-      runPipe fp o
+      runPipe o fp
       removeFile fp
-    Just target -> runPipe target o
+    Just target -> do
+      targetStatus <- F.getFileStatus target
+      if F.isDirectory targetStatus
+        then findHsFiles target >>= mapM_ (runPipe o)
+        else runPipe o target
+
+-- Given base directory finds all haskell source files
+findHsFiles :: FilePath -> IO [FilePath]
+findHsFiles = find filterDirectory filterFilename
+
+filterDirectory :: FindClause Bool
+filterDirectory =
+  p <$> fileName
+  where
+    p x
+      | "." `isPrefixOf` x = False
+      | "builds" `isPrefixOf` x = False
+      | otherwise = True
+
+filterFilename :: FindClause Bool
+filterFilename = do
+  ext <- extension
+  fname <- fileName
+  return (ext == ".hs" && p fname)
+  where
+    p x
+      | "refactored" `isInfixOf` x = False
+      | "Setup.hs" `isInfixOf` x = False
+      | "HLint.hs" `isInfixOf` x = False -- HLint config files
+      | "out.hs"   `isInfixOf` x = False
+      | otherwise                 = True
 
 
 -- Pipe
 
-runPipe :: FilePath -> Options -> IO ()
-runPipe file o@Options{..} = do
+runPipe :: Options -> FilePath  -> IO ()
+runPipe o@Options{..} file = do
   let verb = optionsVerbosity
   path <- canonicalizePath file
   when (verb == Loud) (traceM $ "Getting hints from " ++ path)
