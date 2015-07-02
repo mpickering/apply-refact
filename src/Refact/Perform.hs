@@ -52,16 +52,18 @@ runRefactoring (as,sk) m ModifyComment{..} =
           , annPriorComments = map (first change) annPriorComments }
       changeComment (AnnComment d, dp) = (AnnComment (change d), dp)
       changeComment e = e
-      change old@Comment{..}= if ss2pos commentIdentifier == ss2pos commentLocation
+      change old@Comment{..}= if ss2pos commentIdentifier == ss2pos pos
                                           then old { commentContents = newComment}
                                           else old
-runRefactoring as m Delete{position} =
-  (as, doDelete ((/= position) . getLoc) m)
+runRefactoring as m Delete{pos} =
+  (as, doDelete ((/= pos) . getLoc) m)
+  {-
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
+ -}
 runRefactoring as m InsertComment{..} =
-  let expr = mkAnnKey (findDecl m commentCarrier) in
-  (first (insertComment expr newComment) as, m)
+  let exprkey = mkAnnKey (findDecl m pos) in
+  (first (insertComment exprkey newComment) as, m)
 
 
 
@@ -146,7 +148,7 @@ replaceWorker :: (Annotate a) => Anns -> Module
               -> Parser (GHC.Located a) -> Repl a
               -> Refactoring GHC.SrcSpan -> (Anns, Module)
 replaceWorker as m p r Replace{..} =
-  let replExprLocation = expr
+  let replExprLocation = pos
       (newanns, template) = case unsafePerformIO $ p orig of
                               Right xs -> xs
                               Left err -> error (show err)

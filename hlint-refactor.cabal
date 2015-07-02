@@ -18,6 +18,7 @@ cabal-version:       >=1.10
 library
   exposed-modules:   Refact.Utils
                    , Refact.Perform
+                   , Refact.Fixity
   GHC-Options: -Wall
   build-depends: base >=4.7 && <4.9
                , refact

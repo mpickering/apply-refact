@@ -11,24 +11,35 @@
 module Main where
 
 import Language.Haskell.GHC.ExactPrint hiding (Parser)
+import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Utils
+
 
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 import Refact.Perform
+import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
+import qualified DynFlags as GHC
+import qualified Outputable as GHC
 
 import Options.Applicative
 import Data.Maybe
 import Data.List hiding (find)
+import Data.Ord
 
 import System.Process
 import System.Directory
 import System.IO
 import System.FilePath.Find
+import System.Exit
 import qualified System.PosixCompat.Files as F
 
+import qualified Data.Map as Map
+
 import Control.Monad
+import Control.Arrow
 
 
 import Debug.Trace
@@ -53,6 +64,7 @@ data Options = Options
   , optionsHlintOptions :: String -- ^ Commands to pass to hlint
   , optionsVerbosity :: Verbosity
   , optionsStep :: Bool -- ^ Ask before applying each hint
+  , optionsDebug :: Bool
   }
 
 options :: Parser Options
@@ -85,6 +97,9 @@ options =
     <*>
     switch (short 's'
            <> help "Ask before applying each hint")
+    <*>
+    switch (long "debug"
+           <> help "Output the GHC AST for debugging")
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
@@ -141,8 +156,12 @@ filterFilename = do
 -- Pipe
 
 runPipe :: Options -> FilePath  -> IO ()
-runPipe o@Options{..} file = do
+runPipe Options{..} file = do
   let verb = optionsVerbosity
+  when (verb == Loud) (traceM $ "Parsing module")
+  (anns, m) <- either (error . show) (second doFix) <$> parseModule file
+  let as = relativiseApiAnns m anns
+  when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
   path <- canonicalizePath file
   when (verb == Loud) (traceM $ "Getting hints from " ++ path)
   rawhints <- getHints path
@@ -151,14 +170,12 @@ runPipe o@Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
-  when (verb == Loud) (traceM $ "Parsing module")
-  (anns, m) <- either (error . show) id <$> parseModule file
+      filtRefacts = removeOverlap refacts
   traceM "Applying hints"
-  let as = relativiseApiAnns m anns
       -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
-                   then foldM (uncurry refactoringLoop) (as, m) refacts
-                   else return $ foldl' (uncurry runRefactoring) (as, m) (concatMap snd refacts)
+                   then foldM (uncurry refactoringLoop) (as, m) filtRefacts
+                   else return $ foldl' (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   let output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
@@ -167,6 +184,19 @@ runPipe o@Options{..} file = do
            Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
             writeFile f output
+
+removeOverlap :: [(String, [Refactoring GHC.SrcSpan])] -> [(String, [Refactoring GHC.SrcSpan])]
+removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
+
+  where
+    bad = go rs
+    rs = sortBy (comparing pos) (concatMap snd ideas)
+    go [] = []
+    go (x:y:xs) =
+      if pos y `GHC.isSubspanOf` pos x
+        then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
+             y : go (y:xs)
+        else go (y:xs)
 
 refactoringLoop :: Anns -> Module -> (String, [Refactoring GHC.SrcSpan])
                 -> IO (Anns, Module)
