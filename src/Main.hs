@@ -192,6 +192,7 @@ removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
     bad = go rs
     rs = sortBy (comparing pos) (concatMap snd ideas)
     go [] = []
+    go [x] = [x]
     go (x:y:xs) =
       if pos y `GHC.isSubspanOf` pos x
         then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
