@@ -217,7 +217,7 @@ refactoringLoop as m (desc, rs) =
 -- Run HLint to get the commands
 
 makeCmd :: String -> String
-makeCmd file = "hlint " ++ file ++ " --serialise"
+makeCmd file = "hlint " ++ file ++ " --serialise --cpp-file=dist/build/autogen/cabal_macros.h"
 --makeCmd _ = "runghc-7.10.1.20150609 -package-db=.cabal-sandbox/x86_64-osx-ghc-7.10.1.20150609-packages.conf.d/ feeder.hs"
 
 getHints :: FilePath -> IO String
