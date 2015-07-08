@@ -6,6 +6,7 @@
 module Refact.Perform (runRefactoring) where
 
 import Language.Haskell.GHC.ExactPrint
+import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Annotate
 import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils
@@ -44,8 +45,8 @@ runRefactoring as m r@Replace{}  =
     Type -> replaceWorker as m parseType doGenReplacement r
     Pattern -> replaceWorker as m parsePattern doGenReplacement r
     Stmt -> replaceWorker as m parseStmt doGenReplacement r
-runRefactoring (as,sk) m ModifyComment{..} =
-    ((Map.map go as, sk), m)
+runRefactoring as m ModifyComment{..} =
+    (modifyKeywordDeltas (Map.map go) as, m)
     where
       go a@(Ann{ annPriorComments, annsDP }) =
         a { annsDP = map changeComment annsDP
@@ -63,7 +64,7 @@ runRefactoring as m Rename{nameSubts} = (as, m)
  -}
 runRefactoring as m InsertComment{..} =
   let exprkey = mkAnnKey (findDecl m pos) in
-  (first (insertComment exprkey newComment) as, m)
+  (modifyKeywordDeltas (insertComment exprkey newComment) as, m)
 
 
 
@@ -147,12 +148,12 @@ type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> M (GH
 replaceWorker :: (Annotate a) => Anns -> Module
               -> Parser (GHC.Located a) -> Repl a
               -> Refactoring GHC.SrcSpan -> (Anns, Module)
-replaceWorker as m p r Replace{..} =
+replaceWorker as m parser r Replace{..} =
   let replExprLocation = pos
-      (newanns, template) = case unsafePerformIO $ p orig of
+      p s = unsafePerformIO (withDynFlags (\d -> parser d "template" s))
+      (relat, template) = case p orig of
                               Right xs -> xs
                               Left err -> error (show err)
-      relat = relativiseApiAnns template newanns
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (r replacementPred newExpr))

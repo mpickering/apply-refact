@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE BangPatterns #-}
 
 
 {-# LANGUAGE NamedFieldPuns #-}
@@ -13,6 +14,7 @@ module Main where
 import Language.Haskell.GHC.ExactPrint hiding (Parser)
 import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils
+import Language.Haskell.GHC.ExactPrint.Parsers hiding (Parser)
 
 
 import qualified Refact.Types as R
@@ -205,7 +207,10 @@ refactoringLoop as m (desc, rs) =
      putStrLn "Apply hint [y, N]"
      inp <- getLine
      case inp of
-          "y" -> return $ foldl' (uncurry runRefactoring) (as, m) rs
+          "y" -> let (!r1, !r2) = foldl' (uncurry runRefactoring) (as, m) rs
+                 in do
+                  exactPrintWithAnns r2 r1 `seq` return ()
+                  return $ (r1, r2)
           _   -> do putStrLn "Skipping hint"
                     return (as, m)
 

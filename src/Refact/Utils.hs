@@ -22,6 +22,7 @@ module Refact.Utils ( -- * Synonyms
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Transform (mergeAnns)
 
 import Data.Data
 import HsExpr as GHC hiding (Stmt)
@@ -59,24 +60,19 @@ type Name = GHC.Located GHC.RdrName
 
 type Stmt = ExprLStmt GHC.RdrName
 
--- Manipulation
-
--- | Left bias pair union
-mergeAnns :: Anns -> Anns -> Anns
-mergeAnns (a, b) (c,d) = (Map.union a c, Map.union b d)
-
 
 -- | Replaces an old expression with a new expression
 replace :: AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
-replace old new inp (as, keys) = do
-  oldan <- Map.lookup old as
-  newan <- Map.lookup new as
-  return . (, keys) . Map.delete old . Map.insert inp (combine oldan newan) $ as
+replace old new inp as = do
+  let anns = getKeywordDeltas as
+  oldan <- Map.lookup old anns
+  newan <- Map.lookup new anns
+  return $ modifyKeywordDeltas (Map.delete old . Map.insert inp (combine oldan newan)) as
 
 combine :: Annotation -> Annotation -> Annotation
 combine oldann newann =
   Ann (annEntryDelta oldann) (annDelta oldann) (annTrueEntryDelta oldann)
-      (annPriorComments oldann ++ annPriorComments newann) (annsDP newann ++ extraComma (annsDP oldann))
+      (annPriorComments oldann ++ annPriorComments newann) (annsDP newann ++ extraComma (annsDP oldann)) (annSortKey newann) (annCapturedSpan newann)
   where
     extraComma [] = []
     extraComma (last -> x) = case fst x of

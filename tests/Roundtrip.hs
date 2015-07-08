@@ -24,6 +24,7 @@ import qualified Data.Set as S
 
 import System.IO (hClose, hPutStr, openTempFile)
 import Language.Haskell.GHC.ExactPrint
+import Language.Haskell.GHC.ExactPrint.Parsers
 
 import System.Process
 
