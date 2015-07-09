@@ -41,6 +41,7 @@ import qualified System.PosixCompat.Files as F
 import qualified Data.Map as Map
 
 import Control.Monad
+import Control.Monad.State
 import Control.Arrow
 
 
@@ -172,11 +173,13 @@ runPipe Options{..} file = do
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
       filtRefacts = removeOverlap refacts
-  traceM "Applying hints"
+  traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
+  when (verb == Loud) (traceM $ show filtRefacts)
       -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
                    then foldM (uncurry refactoringLoop) (as, m) filtRefacts
-                   else return $ foldl' (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
+                   else return . flip evalState 0 $
+                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   let output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
@@ -207,7 +210,7 @@ refactoringLoop as m (desc, rs) =
      putStrLn "Apply hint [y, N]"
      inp <- getLine
      case inp of
-          "y" -> let (!r1, !r2) = foldl' (uncurry runRefactoring) (as, m) rs
+          "y" -> let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
                  in do
                   exactPrintWithAnns r2 r1 `seq` return ()
                   return $ (r1, r2)

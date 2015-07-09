@@ -28,6 +28,7 @@ import qualified Data.Map as Map
 import System.IO.Unsafe
 
 import Control.Arrow
+import Control.Monad.State
 
 import Data.Maybe
 
@@ -37,16 +38,20 @@ import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
 
 -- Perform the substitutions
 
-runRefactoring :: Anns -> Module -> Refactoring GHC.SrcSpan -> (Anns, Module)
-runRefactoring as m r@Replace{}  =
-  case rtype r of
-    Expr -> replaceWorker as m parseExpr doGenReplacement r
-    Decl -> replaceWorker as m parseDecl doGenReplacement r
-    Type -> replaceWorker as m parseType doGenReplacement r
-    Pattern -> replaceWorker as m parsePattern doGenReplacement r
-    Stmt -> replaceWorker as m parseStmt doGenReplacement r
+getSeed :: State Int Int
+getSeed = get <* modify (+1)
+
+runRefactoring :: Anns -> Module -> Refactoring GHC.SrcSpan -> State Int (Anns, Module)
+runRefactoring as m r@Replace{}  = do
+  seed <- getSeed
+  return $ case rtype r of
+    Expr -> replaceWorker as m parseExpr doGenReplacement seed r
+    Decl -> replaceWorker as m parseDecl doGenReplacement seed r
+    Type -> replaceWorker as m parseType doGenReplacement seed r
+    Pattern -> replaceWorker as m parsePattern doGenReplacement seed r
+    Stmt -> replaceWorker as m parseStmt doGenReplacement seed r
 runRefactoring as m ModifyComment{..} =
-    (modifyKeywordDeltas (Map.map go) as, m)
+    return $ (modifyKeywordDeltas (Map.map go) as, m)
     where
       go a@(Ann{ annPriorComments, annsDP }) =
         a { annsDP = map changeComment annsDP
@@ -57,14 +62,14 @@ runRefactoring as m ModifyComment{..} =
                                           then old { commentContents = newComment}
                                           else old
 runRefactoring as m Delete{pos} =
-  (as, doDelete ((/= pos) . getLoc) m)
+  return $ (as, doDelete ((/= pos) . getLoc) m)
   {-
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
  -}
 runRefactoring as m InsertComment{..} =
   let exprkey = mkAnnKey (findDecl m pos) in
-  (modifyKeywordDeltas (insertComment exprkey newComment) as, m)
+  return $ (modifyKeywordDeltas (insertComment exprkey newComment) as, m)
 
 
 
@@ -146,11 +151,12 @@ doGenReplacement p new old =
 type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> M (GHC.Located a)
 
 replaceWorker :: (Annotate a) => Anns -> Module
-              -> Parser (GHC.Located a) -> Repl a
+              -> Parser (GHC.Located a) -> Repl a -> Int
               -> Refactoring GHC.SrcSpan -> (Anns, Module)
-replaceWorker as m parser r Replace{..} =
+replaceWorker as m parser r seed Replace{..} =
   let replExprLocation = pos
-      p s = unsafePerformIO (withDynFlags (\d -> parser d "template" s))
+      uniqueName = "template" ++ show seed
+      p s = unsafePerformIO (withDynFlags (\d -> parser d uniqueName s))
       (relat, template) = case p orig of
                               Right xs -> xs
                               Left err -> error (show err)
@@ -159,7 +165,7 @@ replaceWorker as m parser r Replace{..} =
       transformation = everywhereM (mkM (r replacementPred newExpr))
       (final, finalanns) = runState (transformation m) newAnns
    in (finalanns, final)
-replaceWorker as m _ _ _ = (as, m)
+replaceWorker as m _ _ _ _  = (as, m)
 
 
 -- Find the largest expression with a given SrcSpan
