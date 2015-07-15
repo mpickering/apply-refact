@@ -33,6 +33,7 @@ import Data.Ord
 
 import System.Process
 import System.Directory
+import System.FilePath
 import System.IO
 import System.FilePath.Find
 import System.Exit
@@ -68,6 +69,7 @@ data Options = Options
   , optionsVerbosity :: Verbosity
   , optionsStep :: Bool -- ^ Ask before applying each hint
   , optionsDebug :: Bool
+  , optionsRoundtrip :: Bool
   }
 
 options :: Parser Options
@@ -103,6 +105,9 @@ options =
     <*>
     switch (long "debug"
            <> help "Output the GHC AST for debugging")
+    <*>
+    switch (long "roundtrip"
+           <> help "Run ghc-exactprint on the file")
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
