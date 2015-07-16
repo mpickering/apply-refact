@@ -15,6 +15,7 @@ import Data.Data
 import Data.Generics.Schemes
 
 import HsExpr as GHC hiding (Stmt)
+import HsImpExp
 import HsSyn hiding (Pat, Stmt)
 import SrcLoc
 import qualified SrcLoc as GHC
@@ -70,6 +71,13 @@ runRefactoring as m Rename{nameSubts} = (as, m)
 runRefactoring as m InsertComment{..} =
   let exprkey = mkAnnKey (findDecl m pos) in
   return $ (modifyKeywordDeltas (insertComment exprkey newComment) as, m)
+runRefactoring as m RemoveAsKeyword{..} =
+  return (as, removeAsKeyword m)
+  where
+    removeAsKeyword = everywhere (mkT go)
+    go :: LImportDecl GHC.RdrName -> LImportDecl GHC.RdrName
+    go (GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
+
 
 
 
