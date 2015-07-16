@@ -16,6 +16,8 @@ import Data.Generics.Schemes
 
 import HsExpr as GHC hiding (Stmt)
 import HsImpExp
+import FastString
+import qualified Module as GHC
 import HsSyn hiding (Pat, Stmt)
 import SrcLoc
 import qualified SrcLoc as GHC
@@ -37,6 +39,8 @@ import Refact.Types hiding (SrcSpan)
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
                     , mergeAnns, modifyAnnKey, replaceAnnKey)
 
+import Debug.Trace
+
 -- Perform the substitutions
 
 getSeed :: State Int Int
@@ -51,6 +55,13 @@ runRefactoring as m r@Replace{}  = do
     Type -> replaceWorker as m parseType (doGenReplacement m) seed r
     Pattern -> replaceWorker as m parsePattern (doGenReplacement m) seed r
     Stmt -> replaceWorker as m parseStmt (doGenReplacement m) seed r
+    ModuleName -> replaceWorker as m parseModuleName (doGenReplacement m) seed r
+    where
+      parseModuleName :: Parser (GHC.Located GHC.ModuleName)
+      parseModuleName _ (mkFastString -> fname) s =
+        let newMN =  GHC.L (pos r) (GHC.mkModuleName s)
+            newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
+        in return (trace (showGhc newAnns) newAnns, newMN)
 runRefactoring as m ModifyComment{..} =
     return $ (modifyKeywordDeltas (Map.map go) as, m)
     where
@@ -76,7 +87,8 @@ runRefactoring as m RemoveAsKeyword{..} =
   where
     removeAsKeyword = everywhere (mkT go)
     go :: LImportDecl GHC.RdrName -> LImportDecl GHC.RdrName
-    go (GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
+    go imp@(GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
+                    | otherwise =  imp
 
 
 

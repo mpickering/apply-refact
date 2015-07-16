@@ -80,7 +80,7 @@ replace old new inp parent as = do
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
   oldDelta <- annEntryDelta  <$> Map.lookup parent anns
-  return $ modifyKeywordDeltas (Map.delete old . Map.insert inp (combine oldDelta oldan newan)) as
+  return $ modifyKeywordDeltas (Map.insert inp (combine oldDelta oldan newan)) as
 
 combine :: DeltaPos -> Annotation -> Annotation -> Annotation
 combine oldDelta oldann newann =
