@@ -46,11 +46,11 @@ runRefactoring :: Anns -> Module -> Refactoring GHC.SrcSpan -> State Int (Anns, 
 runRefactoring as m r@Replace{}  = do
   seed <- getSeed
   return $ case rtype r of
-    Expr -> replaceWorker as m parseExpr doGenReplacement seed r
-    Decl -> replaceWorker as m parseDecl doGenReplacement seed r
-    Type -> replaceWorker as m parseType doGenReplacement seed r
-    Pattern -> replaceWorker as m parsePattern doGenReplacement seed r
-    Stmt -> replaceWorker as m parseStmt doGenReplacement seed r
+    Expr -> replaceWorker as m parseExpr (doGenReplacement m) seed r
+    Decl -> replaceWorker as m parseDecl (doGenReplacement m) seed r
+    Type -> replaceWorker as m parseType (doGenReplacement m) seed r
+    Pattern -> replaceWorker as m parsePattern (doGenReplacement m) seed r
+    Stmt -> replaceWorker as m parseStmt (doGenReplacement m) seed r
 runRefactoring as m ModifyComment{..} =
     return $ (modifyKeywordDeltas (Map.map go) as, m)
     where
@@ -93,22 +93,22 @@ substTransform m ss = everywhereM (mkM (exprSub m ss)
 
 stmtSub :: Module -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
 stmtSub m subs old@(GHC.L _ (BodyStmt (GHC.L _ (HsVar name)) _ _ _) ) =
-  resolveRdrName (findStmt m) old subs name
+  resolveRdrName m (findStmt m) old subs name
 stmtSub _ _ e = return e
 
 patSub :: Module -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
 patSub m subs old@(GHC.L _ (VarPat name)) =
-  resolveRdrName (findPat m) old subs name
+  resolveRdrName m (findPat m) old subs name
 patSub _ _ e = return e
 
 typeSub :: Module -> [(String, GHC.SrcSpan)] -> Type -> M Type
 typeSub m subs old@(GHC.L _ (HsTyVar name)) =
-  resolveRdrName (findType m) old subs name
+  resolveRdrName m (findType m) old subs name
 typeSub _ _ e = return e
 
 exprSub :: Module -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
 exprSub m subs old@(GHC.L _ (HsVar name)) =
-  resolveRdrName (findExpr m) old subs name
+  resolveRdrName m (findExpr m) old subs name
 exprSub _ _ e = return e
 
 identSub :: Module -> [(String, GHC.SrcSpan)] -> Name -> M Name
@@ -117,7 +117,7 @@ identSub m subs old@(GHC.L _ name) =
   where
     subst :: Name -> (Name, Pat) -> M Name
     subst (mkAnnKey -> oldkey) (n, p)
-      = n <$ modify (\r -> replaceAnnKey r oldkey (mkAnnKey p) (mkAnnKey n))
+      = n <$ modify (\r -> replaceAnnKey r oldkey (mkAnnKey p) (mkAnnKey n) (mkAnnKey p))
 
 resolveRdrName' ::
                   (a -> b -> M a)  ->  (SrcSpan -> b) -> a
@@ -132,12 +132,13 @@ resolveRdrName' g f old subs name =
     _ -> return old
 
 resolveRdrName :: Data old
-               => (SrcSpan -> Located old)
+               => Module
+               -> (SrcSpan -> Located old)
                -> Located old
                -> [(String, SrcSpan)]
                -> GHC.RdrName
                -> M (Located old)
-resolveRdrName = resolveRdrName' modifyAnnKey
+resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
 insertComment :: AnnKey -> String
               -> Map.Map AnnKey Annotation
@@ -149,12 +150,13 @@ insertComment k s as =
 
 
 doGenReplacement :: Data ast
-              => (GHC.Located ast -> Bool)
+              => Module
+              -> (GHC.Located ast -> Bool)
               -> GHC.Located ast
               -> GHC.Located ast
               -> M (GHC.Located ast)
-doGenReplacement p new old =
-  if p old then modifyAnnKey old new else return old
+doGenReplacement m p new old =
+  if p old then modifyAnnKey m old new else return old
 
 type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> M (GHC.Located a)
 

@@ -1,6 +1,10 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE TupleSections  #-}
+{-# LANGUAGE ScopedTypeVariables  #-}
+{-# LANGUAGE GADTs  #-}
+{-# LANGUAGE RankNTypes  #-}
+{-# LANGUAGE DeriveDataTypeable  #-}
 module Refact.Utils ( -- * Synonyms
                       Module
                     , Stmt
@@ -17,11 +21,14 @@ module Refact.Utils ( -- * Synonyms
                     , modifyAnnKey
                     , replaceAnnKey
                     , toGhcSrcSpan
+                    , findParent
 
                     ) where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Internal.Types
+import Language.Haskell.GHC.ExactPrint.Utils
 import Language.Haskell.GHC.ExactPrint.Transform (mergeAnns)
 
 import Data.Data
@@ -35,12 +42,17 @@ import qualified GHC           as GHC hiding (parseModule)
 import Control.Monad.State
 
 import qualified Data.Map as Map
+import Data.Maybe
 
 
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 
+import Data.Generics.Schemes
+import Unsafe.Coerce
+import Data.Typeable
 
+import Debug.Trace
 
 -- Types
 --
@@ -62,17 +74,22 @@ type Stmt = ExprLStmt GHC.RdrName
 
 
 -- | Replaces an old expression with a new expression
-replace :: AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
-replace old new inp as = do
+replace :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
+replace old new inp parent as = do
   let anns = getKeywordDeltas as
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
-  return $ modifyKeywordDeltas (Map.delete old . Map.insert inp (combine oldan newan)) as
+  oldDelta <- annEntryDelta  <$> Map.lookup parent anns
+  return $ modifyKeywordDeltas (Map.delete old . Map.insert inp (combine oldDelta oldan newan)) as
 
-combine :: Annotation -> Annotation -> Annotation
-combine oldann newann =
-  Ann (annEntryDelta oldann) (annDelta oldann) (annTrueEntryDelta oldann)
-      (annPriorComments oldann ++ annPriorComments newann) (annsDP newann ++ extraComma (annsDP oldann)) (annSortKey newann) (annCapturedSpan newann)
+combine :: DeltaPos -> Annotation -> Annotation -> Annotation
+combine oldDelta oldann newann =
+  Ann { annEntryDelta = newEntryDelta
+      , annPriorComments = annPriorComments oldann ++ annPriorComments newann
+      , annFollowingComments = annFollowingComments oldann ++ annFollowingComments newann
+      , annsDP = (annsDP newann ++ extraComma (annsDP oldann))
+      , annSortKey = (annSortKey newann)
+      , annCapturedSpan = (annCapturedSpan newann)}
   where
     extraComma [] = []
     extraComma (last -> x) = case fst x of
@@ -80,6 +97,30 @@ combine oldann newann =
                               AnnSemiSep -> [x]
                               G GHC.AnnSemi -> [x]
                               _ -> []
+    newEntryDelta | deltaRow oldDelta > 0 = oldDelta
+                  | otherwise = annEntryDelta oldann
+--    captured = annCapturedSpan
+
+
+-- | A parent in this case is an element which has the same SrcSpan
+findParent :: Data a => GHC.SrcSpan -> a -> Maybe AnnKey
+findParent ss = something (findParentWorker ss)
+
+
+findParentWorker :: forall a . (Typeable a, Data a)
+           => GHC.SrcSpan -> a -> Maybe AnnKey
+findParentWorker oldSS a
+  | con == typeRepTyCon (typeRep (Proxy :: Proxy (GHC.Located GHC.RdrName))) && x == typeRep (Proxy :: Proxy GHC.SrcSpan)
+      = if ss == oldSS
+          then Just $ AnnKey ss cn
+          else Nothing
+  | otherwise = Nothing
+  where
+    (con, ~[x, y]) = splitTyConApp (typeOf a)
+    ss :: GHC.SrcSpan
+    ss = gmapQi 0 unsafeCoerce a
+    cn = gmapQi 1 (CN . show . toConstr) a
+
 
 
 {-
@@ -95,15 +136,17 @@ moveAnns ((_, dp): _) ((kw, _):xs) = (kw,dp) : xs
 --
 -- For example, this function will ensure the correct relative position and
 -- make sure that any trailing semi colons or commas are transferred.
-modifyAnnKey :: (Data old, Data new) => Located old -> Located new -> M (Located new)
-modifyAnnKey e1 e2 = e2 <$ modify (\m -> replaceAnnKey m (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2))
+modifyAnnKey :: (Data old, Data new) => Module -> Located old -> Located new -> M (Located new)
+modifyAnnKey m e1 e2 = e2 <$ modify (\m -> replaceAnnKey m (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
+  where
+    parentKey = fromMaybe (mkAnnKey e2) (traceShowId (findParent (getLoc e2) m))
 
 
 -- | Lower level version of @modifyAnnKey@
 replaceAnnKey ::
-  Anns -> AnnKey -> AnnKey -> AnnKey -> Anns
-replaceAnnKey a old new inp =
-  case replace old new inp a  of
+  Anns -> AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns
+replaceAnnKey a old new inp deltainfo =
+  case replace old new inp deltainfo a  of
     Nothing -> a
     Just a' -> a'
 
