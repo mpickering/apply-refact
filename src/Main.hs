@@ -203,10 +203,13 @@ removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
     go [] = []
     go [x] = []
     go (x:y:xs) =
-      if pos y `GHC.isSubspanOf` pos x
+      if pos y `check` pos x
         then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
              y : go (y:xs)
         else go (y:xs)
+    check s1 s2 = s2 `GHC.isSubspanOf` s1
+                    || (GHC.srcSpanStart s1 == GHC.srcSpanStart s2
+                        && GHC.srcSpanEnd s1 < GHC.srcSpanEnd s2)
 
 refactoringLoop :: Anns -> Module -> (String, [Refactoring GHC.SrcSpan])
                 -> IO (Anns, Module)
