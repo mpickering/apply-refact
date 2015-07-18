@@ -1,0 +1,1 @@
+import A as B; import A as C

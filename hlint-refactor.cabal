@@ -42,7 +42,7 @@ executable refactor
   ghc-options: -Wall
   build-depends: base >= 4.7 && < 4.9
                , refact
-               , ghc-exactprint
+               , ghc-exactprint >= 0.3
                , ghc
                , containers
                , syb
@@ -52,18 +52,31 @@ executable refactor
                , optparse-applicative
                , filemanip
                , unix-compat
+               , filepath
 
 Test-Suite test
   type:                exitcode-stdio-1.0
-  hs-source-dirs:      tests
+  hs-source-dirs:      tests, src
   main-is:             Test.hs
-  other-modules:      Common
   GHC-Options:         -threaded
   Default-language:    Haskell2010
   if impl (ghc < 7.10)
       buildable: False
-  Build-depends:       hunit
+  Build-depends:       HUnit
                      , base < 5
+               , refact
+               , ghc-exactprint >= 0.3
+               , ghc
+               , containers
+               , syb
+               , mtl
+               , process
+               , directory
+               , optparse-applicative
+               , filemanip
+               , unix-compat
+               , filepath
+               , silently
 
 executable roundtrip
   main-is: Roundtrip.hs

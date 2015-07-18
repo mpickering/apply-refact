@@ -1,0 +1,1 @@
+{-# NOINLINE slaves #-}; slaves = unsafePerformIO newIO

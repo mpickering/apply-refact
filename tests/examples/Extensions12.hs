@@ -1,0 +1,2 @@
+{-# LANGUAGE RecordWildCards #-} 
+record field = Record{..}

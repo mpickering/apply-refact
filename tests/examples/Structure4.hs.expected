@@ -1,0 +1,1 @@
+foo b | c <- f b = c where f = here

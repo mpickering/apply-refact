@@ -1,0 +1,1 @@
+no = fmap lines $ abc $ def 123

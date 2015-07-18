@@ -96,7 +96,7 @@ parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
 parseModuleName ss _ (mkFastString -> fname) s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
       newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
-  in return (trace (showGhc newAnns) newAnns, newMN)
+  in return (newAnns, newMN)
 parseBind :: Parser (GHC.LHsBind GHC.RdrName)
 parseBind dyn fname s =
   case parseDecl dyn fname s of

@@ -1,0 +1,1 @@
+import A; import qualified A as Y

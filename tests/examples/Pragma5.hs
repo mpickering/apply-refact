@@ -1,0 +1,1 @@
+{-# LANGUAGE A, B, C, A #-}

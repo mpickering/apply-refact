@@ -1,0 +1,1 @@
+yes = do bar; a <- foo; return a

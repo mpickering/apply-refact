@@ -1,0 +1,1 @@
+yes = fromInteger 12

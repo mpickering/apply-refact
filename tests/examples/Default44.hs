@@ -1,0 +1,1 @@
+test a = foo (\x -> True)

@@ -1,0 +1,2 @@
+{-# LANGUAGE Arrows #-} 
+f = id

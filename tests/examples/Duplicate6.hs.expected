@@ -1,0 +1,1 @@
+foo = a where {a = 1; b = 2; c = 3}; bar = a where {a = 1; b = 2; c = 3}

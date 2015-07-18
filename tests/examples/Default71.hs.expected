@@ -1,0 +1,1 @@
+fooer input = mapMaybe Just $ input

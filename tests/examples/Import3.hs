@@ -1,0 +1,1 @@
+import A(Bar(..)); import {-# SOURCE #-} A

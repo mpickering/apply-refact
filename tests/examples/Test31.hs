@@ -1,0 +1,1 @@
+import Control.Arrow as Q; test = id Q.*** id

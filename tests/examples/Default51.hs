@@ -1,0 +1,1 @@
+yes = if p then s else return ()

@@ -1,0 +1,2 @@
+import Control.Monad hiding (forM)
+yes = Control.Monad.forM

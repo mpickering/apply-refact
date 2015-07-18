@@ -1,0 +1,1 @@
+yes = f x where f x = concat . map head

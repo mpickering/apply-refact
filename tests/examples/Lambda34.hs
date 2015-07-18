@@ -1,0 +1,1 @@
+foo = [\column -> set column [treeViewColumnTitle := printf "%s (match %d)" name (length candidnates)]]

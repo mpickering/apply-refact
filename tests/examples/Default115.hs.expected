@@ -1,0 +1,1 @@
+foo = map (\ x -> SymInfo x ty) [0 ..]

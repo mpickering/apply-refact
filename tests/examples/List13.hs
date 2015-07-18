@@ -1,0 +1,1 @@
+instance C [Char]

@@ -1,0 +1,1 @@
+yes = if Debug `elem` opts then ["--debug"] else []

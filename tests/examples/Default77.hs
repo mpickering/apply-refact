@@ -1,0 +1,1 @@
+main = drop 0 x

@@ -1,0 +1,2 @@
+{-# LANGUAGE UnboxedTuples #-} 
+f :: Int -> (# Int, Int #)

@@ -1,0 +1,1 @@
+getInt = do { x <- readIO "0"; return $! (x :: Int) }

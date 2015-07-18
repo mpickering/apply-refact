@@ -1,0 +1,1 @@
+main = take 4 x

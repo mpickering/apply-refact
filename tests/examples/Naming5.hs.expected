@@ -1,0 +1,1 @@
+yes_foo = yes_foo + yes_foo

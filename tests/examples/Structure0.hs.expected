@@ -1,0 +1,4 @@
+yes x y
+  | a = b
+  | c = d
+  | otherwise = e

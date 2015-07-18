@@ -1,0 +1,1 @@
+f = foo (\i -> writeIdea (getClass i) i)

@@ -1,0 +1,1 @@
+foo x | otherwise = y

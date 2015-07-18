@@ -1,0 +1,1 @@
+f condition tChar tBool = if condition then _monoField tChar else _monoField tBool

@@ -1,0 +1,1 @@
+no = do foo ; mapM print a

@@ -1,0 +1,1 @@
+main = print $ map (const 5) [2,3,5]

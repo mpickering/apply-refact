@@ -1,0 +1,1 @@
+yes = [if a then b else c] ++ xs

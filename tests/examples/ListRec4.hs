@@ -1,0 +1,1 @@
+f [] a = return a ; f (x:xs) a = a + x >>= \fax -> f xs fax

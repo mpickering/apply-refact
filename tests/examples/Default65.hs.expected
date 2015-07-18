@@ -1,0 +1,1 @@
+main = map ((writer,) . arcObj) (filter (rdfPredEq (Res dctreferences)) ts)

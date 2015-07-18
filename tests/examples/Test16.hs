@@ -1,0 +1,1 @@
+concatMop f x = concat (map f x)

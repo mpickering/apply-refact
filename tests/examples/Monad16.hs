@@ -1,0 +1,1 @@
+yes = do case a of {_ -> forM x y; x:xs -> forM x xs}; return ()

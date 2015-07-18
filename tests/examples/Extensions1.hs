@@ -1,0 +1,2 @@
+{-# LANGUAGE TotallyUnknown #-} 
+f = id

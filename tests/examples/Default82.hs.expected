@@ -1,0 +1,1 @@
+main = let (first, rest) = span p l in rest

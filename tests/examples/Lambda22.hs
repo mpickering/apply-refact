@@ -1,0 +1,1 @@
+x ! y = fromJust $ lookup x y

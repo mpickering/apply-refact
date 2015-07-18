@@ -1,0 +1,1 @@
+main = head $ drop n x

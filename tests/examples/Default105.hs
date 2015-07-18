@@ -1,0 +1,1 @@
+g = \ f -> parseFile f >>= (\ cu -> return (f, cu))

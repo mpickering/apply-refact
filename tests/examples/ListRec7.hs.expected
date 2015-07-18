@@ -1,0 +1,1 @@
+f xs y = foldl (flip g) y xs

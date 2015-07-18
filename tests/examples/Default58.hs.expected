@@ -1,0 +1,1 @@
+when p s = if p then s else return ()

@@ -1,0 +1,1 @@
+data Yes = Foo {bar_cap :: Int}

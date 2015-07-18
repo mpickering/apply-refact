@@ -1,0 +1,1 @@
+yes x = if x then b else a

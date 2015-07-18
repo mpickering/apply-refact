@@ -1,0 +1,1 @@
+slaves = unsafePerformIO . bar

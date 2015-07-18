@@ -1,0 +1,1 @@
+yes = case concat (map f x) of [] -> []

@@ -1,0 +1,1 @@
+yes = foo . bar . concat . map f . baz . bar

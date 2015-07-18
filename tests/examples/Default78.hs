@@ -1,0 +1,1 @@
+main = take 0 x

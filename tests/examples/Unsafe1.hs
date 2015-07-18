@@ -1,0 +1,1 @@
+slaves = unsafePerformIO Multimap.newIO

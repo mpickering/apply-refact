@@ -1,0 +1,1 @@
+type Ignore_Test = Int

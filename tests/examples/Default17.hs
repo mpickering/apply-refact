@@ -1,0 +1,1 @@
+yes = head (reverse xs)

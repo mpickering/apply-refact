@@ -1,0 +1,1 @@
+no = do bar ; foo

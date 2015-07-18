@@ -1,0 +1,1 @@
+yes = baz baz >> return ()

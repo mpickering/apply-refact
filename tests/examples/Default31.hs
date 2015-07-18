@@ -1,0 +1,1 @@
+no = do iter <- textBufferGetTextIter tb ; textBufferSelectRange tb iter iter

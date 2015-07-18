@@ -1,0 +1,1 @@
+no = foo >>= bar >>= something >>= elsee >> return ()

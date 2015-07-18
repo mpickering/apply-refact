@@ -1,0 +1,1 @@
+no = quickCheck ((\h -> cySucc h == succ h) :: Hygiene -> Bool)

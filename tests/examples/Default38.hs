@@ -1,0 +1,1 @@
+yes = if a then True else False

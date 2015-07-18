@@ -1,0 +1,1 @@
+instance Named (DeclHead S)

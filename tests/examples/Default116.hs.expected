@@ -1,0 +1,2 @@
+import Prelude
+yes = Control.Monad.forM

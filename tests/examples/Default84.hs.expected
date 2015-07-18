@@ -1,0 +1,1 @@
+pairs (x:xs) = map (\y -> (x,y)) xs ++ pairs xs

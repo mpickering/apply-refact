@@ -1,0 +1,1 @@
+f (x:xs) = negate x + f xs ; f [] = 0

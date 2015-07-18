@@ -1,0 +1,1 @@
+foo = [\m x -> insert x x m]

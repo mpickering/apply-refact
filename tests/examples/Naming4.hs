@@ -1,0 +1,1 @@
+data No = FOO | BarBAR | BarBBar

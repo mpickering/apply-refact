@@ -1,0 +1,1 @@
+foo = last (sortBy (compare `on` fst) xs)

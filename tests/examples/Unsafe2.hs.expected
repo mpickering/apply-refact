@@ -1,0 +1,3 @@
+
+{-# NOINLINE slaves #-}
+slaves = unsafePerformIO $ f y where foo = 1

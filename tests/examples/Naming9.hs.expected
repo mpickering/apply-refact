@@ -1,0 +1,1 @@
+semiring'laws = 1

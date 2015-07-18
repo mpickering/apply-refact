@@ -1,0 +1,2 @@
+{-# LANGUAGE TemplateHaskell,EmptyDataDecls #-}
+$(return Control.Applicative.<$> dataD (return []) (mkName "Void") [] [] [])

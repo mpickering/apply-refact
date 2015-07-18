@@ -1,0 +1,1 @@
+yes = operator foo $ operator

@@ -1,0 +1,1 @@
+yes = do x <- return $ y + z; foo x

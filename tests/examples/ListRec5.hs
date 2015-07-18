@@ -1,0 +1,1 @@
+foos [] x = x; foos (y:ys) x = foo y $ foos ys x

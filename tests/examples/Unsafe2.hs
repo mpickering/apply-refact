@@ -1,0 +1,1 @@
+slaves = unsafePerformIO $ f y where foo = 1

@@ -1,0 +1,1 @@
+no = mapM print a

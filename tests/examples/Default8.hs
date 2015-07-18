@@ -1,0 +1,1 @@
+yes = if f a then True else b

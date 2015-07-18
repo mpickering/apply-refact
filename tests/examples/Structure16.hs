@@ -1,0 +1,1 @@
+foo = case v of _ | False -> x

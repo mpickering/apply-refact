@@ -1,0 +1,1 @@
+no = do x <- return x; foo x

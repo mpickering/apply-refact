@@ -1,0 +1,1 @@
+instance Arrow (->) where first f = f *** id

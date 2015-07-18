@@ -1,0 +1,1 @@
+yes = readFile $ args !! 0

@@ -1,0 +1,1 @@
+f a (x:xs) b = x + a + b : f a xs b ; f a [] b = []

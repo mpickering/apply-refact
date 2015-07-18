@@ -1,0 +1,1 @@
+foo = (case x of y -> z; q -> w) :: Int

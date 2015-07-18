@@ -1,0 +1,1 @@
+yes = if x == e then l2 ++ xs else [x] ++ check_elem xs

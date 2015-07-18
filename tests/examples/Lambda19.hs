@@ -1,0 +1,1 @@
+f = foo (\x -> \x -> foo x x)

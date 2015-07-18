@@ -1,0 +1,1 @@
+f xs a = foldM (+) a xs

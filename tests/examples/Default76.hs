@@ -1,0 +1,1 @@
+main = head $ drop 2 x

@@ -1,0 +1,2 @@
+{-# LANGUAGE A #-} 
+{-# LANGUAGE B #-}

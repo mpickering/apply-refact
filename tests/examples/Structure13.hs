@@ -1,0 +1,1 @@
+foo = case f v of _ -> x

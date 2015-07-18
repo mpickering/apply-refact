@@ -1,0 +1,2 @@
+{-# LANGUAGE PatternGuards #-} 
+test = case x of _ | y <- z -> w

@@ -1,0 +1,1 @@
+f = foo (\x y -> fun x y)

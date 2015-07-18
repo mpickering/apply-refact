@@ -1,0 +1,35 @@
+
+foo
+  | False = baz
+  | otherwise  = bux
+
+foo a b = ab
+  where
+    (x : xs)
+      | baz = qux
+      | qux = faux
+      | otherwise = vrai
+
+p1
+  | g1 = e1
+  | g2 = e2
+  | otherwise = e3
+
+
+foo = qux (f . b . c)
+
+foo = qux (e)
+
+foo = qux ((+ b))
+
+foo = qux (flip f)
+
+foo = qux (f . b)
+
+foo = qux (f)
+
+foo = qux (f . b)
+
+foo = qux ((+))
+
+

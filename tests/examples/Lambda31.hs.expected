@@ -1,0 +1,1 @@
+f = \z -> foo $ z $ baz z where

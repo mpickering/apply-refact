@@ -1,0 +1,1 @@
+yes = concat.map (\x->if x==e then l' else [x])

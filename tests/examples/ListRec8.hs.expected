@@ -1,0 +1,1 @@
+f [] y = y; f (x:xs) y = f xs (f xs z)

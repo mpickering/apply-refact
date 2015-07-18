@@ -1,0 +1,1 @@
+yes = concat $ Data.List.intersperse " " xs

@@ -1,0 +1,1 @@
+test = map (not . not) xs

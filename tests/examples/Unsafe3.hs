@@ -1,0 +1,1 @@
+slaves v = unsafePerformIO $ Multimap.newIO where foo = 1

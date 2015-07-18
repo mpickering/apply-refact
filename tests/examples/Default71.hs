@@ -1,0 +1,1 @@
+fooer input = catMaybes . map Just $ input

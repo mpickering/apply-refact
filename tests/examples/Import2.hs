@@ -1,0 +1,1 @@
+import A(Foo) ; import A

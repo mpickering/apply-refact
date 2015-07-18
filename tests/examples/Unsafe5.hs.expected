@@ -1,0 +1,3 @@
+
+{-# NOINLINE slaves #-}
+slaves = x where x = unsafePerformIO Multimap.newIO

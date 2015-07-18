@@ -1,0 +1,1 @@
+foldM_ f a xs = foldM f a xs >> return ()

@@ -1,0 +1,2 @@
+{-# LANGUAGE StandaloneDeriving #-}
+deriving instance Show Bar

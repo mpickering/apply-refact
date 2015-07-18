@@ -1,0 +1,1 @@
+foldM_ f a xs = Control.Monad.void (foldM f a xs)

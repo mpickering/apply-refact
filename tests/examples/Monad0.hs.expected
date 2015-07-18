@@ -1,0 +1,1 @@
+yes = do mapM_ print a; return b

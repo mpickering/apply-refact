@@ -1,0 +1,2 @@
+import Text.Blaze.Html5.Attributes as A
+main = A.id (stringValue id')

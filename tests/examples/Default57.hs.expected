@@ -1,0 +1,1 @@
+no  = [Left x | Left x <- xs]

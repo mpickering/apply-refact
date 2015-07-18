@@ -1,0 +1,1 @@
+data Yes = Yes (Maybe [Char])

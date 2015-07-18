@@ -1,0 +1,1 @@
+yes = if a || b then 1 else 2

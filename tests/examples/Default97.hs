@@ -1,0 +1,1 @@
+data Pair = P {a :: !Int}; foo = return $! P undefined

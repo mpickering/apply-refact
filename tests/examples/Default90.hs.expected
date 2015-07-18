@@ -1,0 +1,1 @@
+used = any (`notElem` special) . fst . derives

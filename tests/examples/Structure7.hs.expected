@@ -1,0 +1,4 @@
+foo x = yes x x where yes x y
+                        | a = b
+                        | c = d
+                        | otherwise = e

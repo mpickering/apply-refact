@@ -1,0 +1,1 @@
+fun x y z = f x x y z

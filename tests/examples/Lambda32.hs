@@ -1,0 +1,1 @@
+f = \x -> bar map (filter x) where

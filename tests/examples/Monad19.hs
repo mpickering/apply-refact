@@ -1,0 +1,1 @@
+yes = mapM async ds >>= mapM wait >> return ()

@@ -1,0 +1,1 @@
+type Ann_Test = Int

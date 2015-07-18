@@ -1,0 +1,2 @@
+
+data Foo = Foo Int deriving Class

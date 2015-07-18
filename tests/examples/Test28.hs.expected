@@ -1,0 +1,1 @@
+import qualified Array as B; test = tail

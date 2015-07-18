@@ -1,0 +1,1 @@
+foo x | a = b | otherwise = d

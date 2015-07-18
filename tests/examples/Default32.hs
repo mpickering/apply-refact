@@ -1,0 +1,1 @@
+no = flip f x $ \y -> y*y+y

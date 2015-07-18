@@ -1,0 +1,1 @@
+no  = take n (foo xs) == "hello"

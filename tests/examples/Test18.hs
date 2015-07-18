@@ -1,0 +1,1 @@
+import Foo; test = Foo.id 1

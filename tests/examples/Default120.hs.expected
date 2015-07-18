@@ -1,0 +1,2 @@
+import qualified Control.Monad
+yes = Control.Monad.forM

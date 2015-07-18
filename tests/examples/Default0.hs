@@ -1,0 +1,1 @@
+yes = concat . map f

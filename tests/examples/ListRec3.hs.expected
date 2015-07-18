@@ -1,0 +1,1 @@
+f a xs b = map (\ x -> x + a + b) xs

@@ -139,7 +139,7 @@ moveAnns ((_, dp): _) ((kw, _):xs) = (kw,dp) : xs
 modifyAnnKey :: (Data old, Data new) => Module -> Located old -> Located new -> M (Located new)
 modifyAnnKey m e1 e2 = e2 <$ modify (\m -> replaceAnnKey m (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
   where
-    parentKey = fromMaybe (mkAnnKey e2) (traceShowId (findParent (getLoc e2) m))
+    parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) m)
 
 
 -- | Lower level version of @modifyAnnKey@

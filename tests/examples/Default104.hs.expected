@@ -1,0 +1,1 @@
+foo = maximumBy (compare `on` fst) xs

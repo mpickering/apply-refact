@@ -1,0 +1,1 @@
+folder f a xs = foldM_ f a xs >> return ()

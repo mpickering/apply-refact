@@ -1,0 +1,1 @@
+main = do f; (print x)

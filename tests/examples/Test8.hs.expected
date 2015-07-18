@@ -1,0 +1,1 @@
+ignoreAny = scanr
