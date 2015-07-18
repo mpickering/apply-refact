@@ -15,15 +15,16 @@ before_install:
 
 install:
  - cabal --version
+ - sudo apt-get install happy-1.19.4 alex-3.1.3
+ - git clone https://github.com/mpickering/hlint
+ - cabal install ./hlint
  - cabal sandbox init
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
  - git clone https://github.com/mpickering/refact
  - git clone https://github.com/mpickering/ghc-exactprint
- - git clone https://github.com/mpickering/hlint
  - cabal sandbox add-source ./refact
  - cabal sandbox add-source ./ghc-exactprint
- - cabal install ./hlint
  - cabal install --only-dependencies --enable-tests --enable-benchmarks
 
 # Here starts the actual work to be performed for the package under
