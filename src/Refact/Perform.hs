@@ -15,6 +15,8 @@ import Data.Data
 import Data.Generics.Schemes
 
 import HsExpr as GHC hiding (Stmt)
+import qualified HsBinds as GHC
+import qualified HsDecls as GHC
 import HsImpExp
 import FastString
 import qualified Module as GHC
@@ -36,6 +38,7 @@ import Control.Monad.State
 import Data.Maybe
 
 import Refact.Types hiding (SrcSpan)
+import qualified Refact.Types as R
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
                     , mergeAnns, modifyAnnKey, replaceAnnKey)
 
@@ -55,13 +58,10 @@ runRefactoring as m r@Replace{}  = do
     Type -> replaceWorker as m parseType (doGenReplacement m) seed r
     Pattern -> replaceWorker as m parsePattern (doGenReplacement m) seed r
     Stmt -> replaceWorker as m parseStmt (doGenReplacement m) seed r
-    ModuleName -> replaceWorker as m parseModuleName (doGenReplacement m) seed r
-    where
-      parseModuleName :: Parser (GHC.Located GHC.ModuleName)
-      parseModuleName _ (mkFastString -> fname) s =
-        let newMN =  GHC.L (pos r) (GHC.mkModuleName s)
-            newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
-        in return (trace (showGhc newAnns) newAnns, newMN)
+    Bind -> replaceWorker as m parseBind (doGenReplacement m) seed r
+    R.Match ->  replaceWorker as m parseMatch (doGenReplacement m) seed r
+    ModuleName -> replaceWorker as m (parseModuleName (pos r))(doGenReplacement m) seed r
+
 runRefactoring as m ModifyComment{..} =
     return $ (modifyKeywordDeltas (Map.map go) as, m)
     where
@@ -92,6 +92,27 @@ runRefactoring as m RemoveAsKeyword{..} =
 
 
 
+parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
+parseModuleName ss _ (mkFastString -> fname) s =
+  let newMN =  GHC.L ss (GHC.mkModuleName s)
+      newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
+  in return (trace (showGhc newAnns) newAnns, newMN)
+parseBind :: Parser (GHC.LHsBind GHC.RdrName)
+parseBind dyn fname s =
+  case parseDecl dyn fname s of
+    -- Safe as we add no annotations to the ValD
+    Right (as, GHC.L l (GHC.ValD b)) -> Right (as, GHC.L l b)
+    Right (_, GHC.L l _) -> Left (l, "Not a HsBind")
+    Left e -> Left e
+parseMatch :: Parser (GHC.LMatch GHC.RdrName (GHC.LHsExpr GHC.RdrName))
+parseMatch dyn fname s =
+  case parseBind dyn fname s of
+    Right (as, GHC.L l GHC.FunBind{fun_matches}) ->
+      case GHC.mg_alts fun_matches of
+           [x] -> Right (as, x)
+           _   -> Left (l, "Not a single match")
+    Right (as, GHC.L l _) -> Left (l, "Not a funbind")
+    Left e -> Left e
 
 -- Substitute variables into templates
 
@@ -216,7 +237,7 @@ findName :: Module -> SrcSpan -> (Name, Pat)
 findName m ss =
   case findPat m ss of
        p@(GHC.L l (VarPat n)) -> (GHC.L l n, p)
-       _ -> error "Not var pat"
+       GHC.L l _ -> error $ "Not var pat: " ++ showGhc l
 
 
 findLargestExpression :: SrcSpan -> GHC.Located ast -> Maybe (GHC.Located ast)
