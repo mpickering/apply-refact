@@ -58,7 +58,7 @@ Test-Suite test
   type:                exitcode-stdio-1.0
   hs-source-dirs:      tests, src
   main-is:             Test.hs
-  GHC-Options:         -threaded
+  GHC-Options:         -threaded -main-is Test
   Default-language:    Haskell2010
   if impl (ghc < 7.10)
       buildable: False
