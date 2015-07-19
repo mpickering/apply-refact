@@ -1,0 +1,2 @@
+foo = qux (f Control.Monad.>=> g)
+
