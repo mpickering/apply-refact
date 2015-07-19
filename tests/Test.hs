@@ -1,7 +1,8 @@
 {-# LANGUAGE RecordWildCards #-}
 module Test where
 
-import Test.HUnit
+import Test.Tasty
+import Test.Tasty.Golden
 import System.Directory
 import System.FilePath
 
@@ -33,19 +34,19 @@ testOptionsWithHelp
 main = do
   o@TestOptions{..} <- execParser testOptionsWithHelp
   setCurrentDirectory "tests/examples"
-  runTestTT =<< mkTests optGenerate <$> findTests
+  defaultMain =<< mkTests optGenerate <$> findTests
 
 findTests :: IO [FilePath]
 findTests = do
   files <- getDirectoryContents "./"
-  return (filter ((== ".hs") . takeExtension ) files)
+  return $ (filter ((== ".hs") . takeExtension ) files)
 
 
-mkTests :: Bool -> [FilePath] -> Test
-mkTests gen files = TestList (map mkTest files)
+mkTests :: Bool -> [FilePath] -> TestTree
+mkTests gen files = testGroup "Unit tests" (map mkTest files)
   where
-    mkTest :: FilePath -> Test
-    mkTest fp = TestCase $ do
+    mkTest :: FilePath -> TestTree
+    mkTest fp =
       let outfile = fp <.> if gen then "expected" else "out"
           topts = Options
                   { optionsTarget       = Just fp
@@ -58,10 +59,9 @@ mkTests gen files = TestList (map mkTest files)
                   , optionsRoundtrip     = False
                   , optionsDebug         = False
                   }
-      hSilence [stderr] $ runPipe topts fp
-      res <- readFile outfile
-      exp <- readFile (fp <.> "expected")
-      exp @=? res
+          action = hSilence [stderr] $ runPipe topts fp
+          diffCmd = \ref new -> ["diff", "-u", ref, new]
+      in goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
 
 
 

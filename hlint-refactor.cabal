@@ -62,7 +62,8 @@ Test-Suite test
   Default-language:    Haskell2010
   if impl (ghc < 7.10)
       buildable: False
-  Build-depends:       HUnit
+  Build-depends:       tasty
+                     , tasty-golden
                      , base < 5
                , refact
                , ghc-exactprint >= 0.3

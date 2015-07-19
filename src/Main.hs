@@ -192,6 +192,7 @@ runPipe Options{..} file = do
            Nothing -> putStrLn output
            Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
+--            writeFile (f <.> "out") (showAnnData ares 0 res)
             writeFile f output
 
 removeOverlap :: [(String, [Refactoring GHC.SrcSpan])] -> [(String, [Refactoring GHC.SrcSpan])]
