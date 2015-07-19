@@ -1,1 +1,1 @@
-slaves = x where x = unsafePerformIO $ Multimap.newIO
+slaves = x where x = unsafePerformIO Multimap.newIO

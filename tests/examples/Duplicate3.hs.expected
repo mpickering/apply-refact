@@ -1,1 +1,1 @@
-main = do do b; a; a; a; do c; a; a; a
+main = do do b; a; a; a; (do c; a; a; a)

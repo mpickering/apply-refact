@@ -1,2 +1,2 @@
-{-# LANGUAGE A #-} 
-{-# LANGUAGE B, A #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE GADTs, CPP #-}

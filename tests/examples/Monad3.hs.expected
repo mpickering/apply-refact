@@ -1,1 +1,1 @@
-yes = bar+foo
+yes = (bar+foo)

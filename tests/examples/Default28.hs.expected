@@ -1,0 +1,1 @@
+yes = foo $ Control.Arrow.second ((+) y)

@@ -1,2 +1,2 @@
-yes = if nullPS s || (headPS s /= '\n') then return False else alter_input tailPS >> return True
+yes = ifnullPS s then return False else ifheadPS s /= '\n' then return False else alter_input tailPS >> return True
 

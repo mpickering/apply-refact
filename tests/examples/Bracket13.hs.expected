@@ -1,1 +1,1 @@
-yes x =x && x
+yes x = x && x

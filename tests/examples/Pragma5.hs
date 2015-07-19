@@ -1,1 +1,1 @@
-{-# LANGUAGE A, B, C, A #-}
+{-# LANGUAGE NoMonomorphismRestriction, CPP, NoMonomorphismRestriction #-}

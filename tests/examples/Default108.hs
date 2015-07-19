@@ -1,1 +1,1 @@
-foo = (\f -> h f >>= g)
+foo = qux (\f -> h f >>= g)

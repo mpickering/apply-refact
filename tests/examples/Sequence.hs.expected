@@ -5,5 +5,5 @@ mapAndUnzipM      :: (Monad m) => (a -> m (b,c)) -> [a] -> m ([b], [c])
 {-# INLINE mapAndUnzipM #-}
 mapAndUnzipM f xs =  mapM f xs >>= return . foo
 
-ren = run foo run
+ren = run (foo) run
 

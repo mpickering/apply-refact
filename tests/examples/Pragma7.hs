@@ -1,1 +1,1 @@
-{-# OPTIONS_GHC -cpp -foo #-}
+{-# OPTIONS_GHC -cpp -main-is Baz #-}

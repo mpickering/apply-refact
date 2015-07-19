@@ -1,0 +1,2 @@
+{-# LANGUAGE GADTs, ParallelListComp #-}
+f = [(a,c) | a <- b | c <- d]
