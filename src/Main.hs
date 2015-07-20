@@ -200,7 +200,7 @@ removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
 
   where
     bad = go rs
-    rs = sortBy (comparing pos) (concatMap snd ideas)
+    rs = nub $ sortBy (comparing pos) (concatMap snd ideas)
     go [] = []
     go [x] = []
     go (x:y:xs) =
