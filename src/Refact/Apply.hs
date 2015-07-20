@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-module Refact.Perform (runRefactoring) where
+module Refact.Apply  where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
@@ -42,7 +42,6 @@ import qualified Refact.Types as R
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
                     , mergeAnns, modifyAnnKey, replaceAnnKey)
 
-import Debug.Trace
 
 -- Perform the substitutions
 
@@ -153,7 +152,7 @@ identSub m subs old@(GHC.L _ name) =
       = n <$ modify (\r -> replaceAnnKey r oldkey (mkAnnKey p) (mkAnnKey n) (mkAnnKey p))
 
 resolveRdrName' ::
-                  (a -> b -> M a)  ->  (SrcSpan -> b) -> a
+                  (a -> b -> M a)  -> (SrcSpan -> b) -> a
                -> [(String, GHC.SrcSpan)] -> GHC.RdrName -> M a
 resolveRdrName' g f old subs name =
   case name of

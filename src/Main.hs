@@ -19,7 +19,7 @@ import Language.Haskell.GHC.ExactPrint.Parsers hiding (Parser)
 
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
-import Refact.Perform
+import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
