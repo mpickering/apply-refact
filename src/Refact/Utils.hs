@@ -152,6 +152,6 @@ replaceAnnKey a old new inp deltainfo =
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
-toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f start) (f end)
+toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
   where
-    f (x,y) = mkSrcLoc (GHC.mkFastString file) x y
+    f x y = mkSrcLoc (GHC.mkFastString file) x y

@@ -21,7 +21,7 @@ library
                    , Refact.Fixity
   GHC-Options: -Wall
   build-depends: base >=4.7 && <4.9
-               , refact
+               , refact >= 0.2
                , ghc-exactprint >= 0.3
                , ghc
                , containers
@@ -41,7 +41,7 @@ executable refactor
   default-language: Haskell2010
   ghc-options: -Wall
   build-depends: base >= 4.7 && < 4.9
-               , refact
+               , refact >= 0.2
                , ghc-exactprint >= 0.3
                , ghc
                , containers
@@ -65,7 +65,7 @@ Test-Suite test
   Build-depends:       tasty
                      , tasty-golden
                      , base < 5
-               , refact
+               , refact >= 0.2
                , ghc-exactprint >= 0.3
                , ghc
                , containers
