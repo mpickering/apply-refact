@@ -27,7 +27,7 @@ findTests = do
 
 
 mkTests :: [FilePath] -> TestTree
-mkTests gen files = testGroup "Unit tests" (map mkTest files)
+mkTests files = testGroup "Unit tests" (map mkTest files)
   where
     mkTest :: FilePath -> TestTree
     mkTest fp =

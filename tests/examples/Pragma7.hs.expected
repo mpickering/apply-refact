@@ -1,3 +1,2 @@
 {-# OPTIONS_GHC -main-is Baz #-}
 {-# LANGUAGE CPP #-}
-

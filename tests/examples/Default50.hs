@@ -1,1 +1,1 @@
-yes = case x z of Nothing -> y z; Just pattern -> pattern
+yes = case x z of Nothing -> y z; Just pat -> pat
