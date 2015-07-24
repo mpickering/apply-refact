@@ -44,6 +44,8 @@ import qualified Refact.Types as R
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
                     , mergeAnns, modifyAnnKey, replaceAnnKey)
 
+import Debug.Trace
+
 
 -- Perform the substitutions
 
