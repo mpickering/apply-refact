@@ -45,6 +45,8 @@ import Control.Monad
 import Control.Monad.State
 import Control.Arrow
 
+import Paths_apply_refact
+import Data.Version
 
 import Debug.Trace
 
@@ -70,6 +72,7 @@ data Options = Options
   , optionsStep :: Bool -- ^ Ask before applying each hint
   , optionsDebug :: Bool
   , optionsRoundtrip :: Bool
+  , optionsVersion :: Bool
   }
 
 options :: Parser Options
@@ -108,6 +111,9 @@ options =
     <*>
     switch (long "roundtrip"
            <> help "Run ghc-exactprint on the file")
+    <*>
+    switch (long "version"
+           <> help "Display version number")
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
@@ -122,6 +128,7 @@ optionsWithHelp
 main :: IO ()
 main = do
   o@Options{..} <- execParser optionsWithHelp
+  when (optionsVersion) (putStrLn ("v" ++ showVersion version) >> exitSuccess)
   case optionsTarget of
     Nothing -> do
       (fp, hin) <- openTempFile "./" "stdin"
