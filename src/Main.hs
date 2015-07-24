@@ -11,10 +11,8 @@
 {-# LANGUAGE NoMonomorphismRestriction #-}
 module Main where
 
-import Language.Haskell.GHC.ExactPrint hiding (Parser)
-import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Utils
-import Language.Haskell.GHC.ExactPrint.Parsers hiding (Parser)
 
 
 import qualified Refact.Types as R
@@ -23,8 +21,6 @@ import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
-import qualified DynFlags as GHC
-import qualified Outputable as GHC
 
 import Options.Applicative
 import Data.Maybe
@@ -33,13 +29,11 @@ import Data.Ord
 
 import System.Process
 import System.Directory
-import System.FilePath
 import System.IO
+import System.IO.Temp
 import System.FilePath.Find
 import System.Exit
 import qualified System.PosixCompat.Files as F
-
-import qualified Data.Map as Map
 
 import Control.Monad
 import Control.Monad.State
@@ -132,10 +126,9 @@ main = do
   when optionsVersion (putStrLn ("v" ++ showVersion version) >> exitSuccess)
   case optionsTarget of
     Nothing -> do
-      (fp, hin) <- openTempFile "./" "stdin"
-      getContents >>= hPutStrLn hin >> hClose hin
-      runPipe o fp
-      removeFile fp
+      withSystemTempFile "stdin"  (\fp hin -> do
+        getContents >>= hPutStrLn hin >> hClose hin
+        runPipe o fp)
     Just target -> do
       targetStatus <- F.getFileStatus target
       if F.isDirectory targetStatus
@@ -210,7 +203,7 @@ removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
     bad = go rs
     rs = nub $ sortBy (comparing pos) (concatMap snd ideas)
     go [] = []
-    go [x] = []
+    go [_] = []
     go (x:y:xs) =
       if pos x `check` pos y
         then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
