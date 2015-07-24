@@ -167,7 +167,7 @@ runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
   when (verb == Loud) (traceM $ "Parsing module")
-  (as, m) <- either (error . show) (second doFix) <$> parseModule file
+  (as, m) <- either (error . show) (uncurry doFix) <$> parseModule file
   when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
   path <- canonicalizePath file
   when (verb == Loud) (traceM $ "Getting hints from " ++ path)

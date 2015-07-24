@@ -1,5 +1,6 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
 module Refact.Fixity (doFix) where
 
 import SrcLoc
@@ -14,26 +15,32 @@ import PlaceHolder
 import Data.Generics hiding (Fixity)
 import Data.Maybe
 import Language.Haskell.GHC.ExactPrint.Utils
+import Language.Haskell.GHC.ExactPrint.Types
 
-import Control.Monad.Identity
-
--- Useful for debugging
---deriving instance Show Fixity
---deriving instance Show FixityDirection
+import Control.Monad.State
+import qualified Data.Map as Map
+import Data.Tuple
 
 -- | Rearrange infix expressions to account for fixity
--- Note that this does not require changes to the annotations as OpApp has no annotations
-doFix :: Module -> Module
-doFix = everywhere (mkT expFix)
+doFix :: Anns -> Module -> (Anns, Module)
+doFix as m = swap $ runState (everywhereM (mkM expFix) m) as
 
-expFix :: LHsExpr RdrName -> LHsExpr RdrName
-expFix (L loc (OpApp l op p r)) =
-  L loc (mkOpAppRn baseFixities l op (findFixity baseFixities op) r)
-expFix e = e
+expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
+expFix (L loc (OpApp l op p r)) = do
+  newExpr <- mkOpAppRn baseFixities l op (findFixity baseFixities op) r
+  return (L loc newExpr)
+
+expFix e = return e
 
 getIdent (unLoc -> HsVar n) = occNameString . rdrNameOcc $ n
 getIdent _ = error "Must be HsVar"
 
+
+moveDelta :: AnnKey -> AnnKey -> M ()
+moveDelta old new = do
+  a@Ann{..} <- gets (fromMaybe annNone . Map.lookup old)
+  modify (Map.insert new (annNone { annEntryDelta = annEntryDelta, annPriorComments = annPriorComments }))
+  modify (Map.insert old (a { annEntryDelta = DP (0,0), annPriorComments = []}))
 
 ---------------------------
 -- Modified from GHC Renamer
@@ -43,16 +50,17 @@ mkOpAppRn ::
           -> LHsExpr RdrName -> Fixity            -- Operator and fixity
           -> LHsExpr RdrName                      -- Right operand (not an OpApp, but might
                                                 -- be a NegApp)
-          -> HsExpr RdrName
+          -> M (HsExpr RdrName)
 
 -- (e11 `op1` e12) `op2` e2
 mkOpAppRn fs e1@(L _ (OpApp e11 op1 p e12)) op2 fix2 e2
   | nofix_error
-  = OpApp e1 op2 p e2
+  = return $ OpApp e1 op2 p e2
 
-  | associate_right =
-    let new_e = mkOpAppRn fs e12 op2 fix2 e2
-    in OpApp e11 op1 p (L loc' new_e)
+  | associate_right = do
+    new_e <- L loc' <$> mkOpAppRn fs e12 op2 fix2 e2
+    moveDelta (mkAnnKey e12) (mkAnnKey new_e)
+    return $ OpApp e11 op1 p new_e
   where
     fix1 = findFixity fs op1
     loc'= combineLocs e12 e2
@@ -62,12 +70,13 @@ mkOpAppRn fs e1@(L _ (OpApp e11 op1 p e12)) op2 fix2 e2
 --      (- neg_arg) `op` e2
 mkOpAppRn fs e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
   | nofix_error
-  = OpApp e1 op2 PlaceHolder e2
+  = return $ OpApp e1 op2 PlaceHolder e2
 
   | associate_right
-  =
-      let new_e = mkOpAppRn fs neg_arg op2 fix2 e2
-      in (NegApp (L loc' new_e) neg_name)
+  = do
+      new_e <- L loc' <$> mkOpAppRn fs neg_arg op2 fix2 e2
+      moveDelta (mkAnnKey neg_arg) (mkAnnKey new_e)
+      return $ (NegApp new_e neg_name)
   where
     loc' = combineLocs neg_arg e2
     (nofix_error, associate_right) = compareFixity negateFixity fix2
@@ -76,14 +85,14 @@ mkOpAppRn fs e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
 --      e1 `op` - neg_arg
 mkOpAppRn fs e1 op1 fix1 e2@(L _ (NegApp _ _))     -- NegApp can occur on the right
   | not associate_right                 -- We *want* right association
-  = OpApp e1 op1 PlaceHolder e2
+  = return $ OpApp e1 op1 PlaceHolder e2
   where
     (_, associate_right) = compareFixity fix1 negateFixity
 
 ---------------------------
 --      Default case
 mkOpAppRn fs e1 op fix e2                  -- Default case, no rearrangment
-  = OpApp e1 op PlaceHolder e2
+  = return $ OpApp e1 op PlaceHolder e2
 
 findFixity :: [(String, Fixity)] -> Expr -> Fixity
 findFixity fs r = askFix fs (getIdent r)

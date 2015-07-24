@@ -25,8 +25,10 @@ import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
 import qualified OccName as GHC
+import qualified Outputable as GHC
 import Data.Generics
 import Control.Monad.State
+import Data.Tuple
 
 import qualified Data.Map as Map
 
