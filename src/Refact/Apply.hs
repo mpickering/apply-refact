@@ -62,7 +62,7 @@ runRefactoring as m r@Replace{}  = do
     ModuleName -> replaceWorker as m (parseModuleName (pos r))(doGenReplacement m) seed r
 
 runRefactoring as m ModifyComment{..} =
-    return $ (modifyKeywordDeltas (Map.map go) as, m)
+    return $ (Map.map go as, m)
     where
       go a@(Ann{ annPriorComments, annsDP }) =
         a { annsDP = map changeComment annsDP
@@ -80,7 +80,7 @@ runRefactoring as m Rename{nameSubts} = (as, m)
  -}
 runRefactoring as m InsertComment{..} =
   let exprkey = mkAnnKey (findDecl m pos) in
-  return $ (modifyKeywordDeltas (insertComment exprkey newComment) as, m)
+  return $ (insertComment exprkey newComment as, m)
 runRefactoring as m RemoveAsKeyword{..} =
   return (as, removeAsKeyword m)
   where
@@ -176,7 +176,7 @@ insertComment :: AnnKey -> String
               -> Map.Map AnnKey Annotation
               -> Map.Map AnnKey Annotation
 insertComment k s as =
-  let comment = Comment (DP (0, length s)) s GHC.noSrcSpan Nothing in
+  let comment = Comment s GHC.noSrcSpan Nothing in
   Map.adjust (\a@Ann{..} -> a { annPriorComments = annPriorComments ++ [(comment, DP (1,0))]
                           , annEntryDelta = DP (1,0) }) k as
 

@@ -27,7 +27,6 @@ module Refact.Utils ( -- * Synonyms
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
-import Language.Haskell.GHC.ExactPrint.Internal.Types
 import Language.Haskell.GHC.ExactPrint.Utils
 import Language.Haskell.GHC.ExactPrint.Transform (mergeAnns)
 
@@ -75,12 +74,11 @@ type Stmt = ExprLStmt GHC.RdrName
 
 -- | Replaces an old expression with a new expression
 replace :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
-replace old new inp parent as = do
-  let anns = getKeywordDeltas as
+replace old new inp parent anns = do
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
   oldDelta <- annEntryDelta  <$> Map.lookup parent anns
-  return $ modifyKeywordDeltas (Map.insert inp (combine oldDelta oldan newan)) as
+  return $ (Map.insert inp (combine oldDelta oldan newan)) anns
 
 combine :: DeltaPos -> Annotation -> Annotation -> Annotation
 combine oldDelta oldann newann =
