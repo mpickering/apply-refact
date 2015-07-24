@@ -117,10 +117,11 @@ options =
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
-  = info (helper <*> options)
+  =
+    info (helper <*> options)
           ( fullDesc
           <> progDesc "Automatically perform hlint suggestions"
-          <> header "hlint-refactor" )
+          <> header "apply-refactor" )
 
 
 
