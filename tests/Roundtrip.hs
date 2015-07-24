@@ -62,7 +62,7 @@ main = do
     [] -> putStrLn "Must enter directory to process"
     ["failures"] -> do
       fs <- lines <$> readFile "origfailures.txt"
-      () <$ runTests (TestList (map mkParserTest fs))
+      () <$ runTests (TestList (map (mkParserTest "./") fs))
     ["clean"] -> do
       putStrLn "Cleaning..."
       writeFile processed ""
@@ -115,21 +115,32 @@ filterFilename = do
 -- Hackage dir
 roundTripHackage :: S.Set String -> FilePath -> IO Test
 roundTripHackage done hackageDir = do
-  packageDirs <- drop 2 <$> getDirectoryContents hackageDir
+  packageDirs <- take 100 . filter (not . ("." `isPrefixOf`)) . drop 2 <$> getDirectoryContents hackageDir
   TestList <$> mapM (roundTripPackage done) (zip [0..] (map (hackageDir </>) packageDirs))
+
 
 
 roundTripPackage :: S.Set String -> (Int, FilePath) -> IO Test
 roundTripPackage done (n, dir) = do
-  putStrLn (show n)
-  hsFiles <- filter (flip S.notMember done)  <$> findSrcFiles dir
+  dir' <- canonicalizePath dir
+-- oldDir <- getCurrentDirectory
+--  setCurrentDirectory dir'
+--  putStrLn ("Configuring... " ++ dir')
+--  catchAny (callCommand "cabal configure --package-db=/Users/matt/Documents/haskell/stackage-packages/builds/nightly/pkgdb") (\_ -> return ())
+--  setCurrentDirectory oldDir
+  putStrLn "Configured"
+  hsFiles <- filter (flip S.notMember done)  <$> findSrcFiles dir'
+  putStrLn $ "Found "  ++ show (length hsFiles) ++ " files"
 
-  return (TestLabel (dropFileName dir) (TestList $ map mkParserTest hsFiles))
+  return (TestLabel (dropFileName dir) (TestList $ map (mkParserTest dir') hsFiles))
 
-mkParserTest :: FilePath -> Test
-mkParserTest fp =
+mkParserTest :: FilePath -> FilePath -> Test
+mkParserTest cd fp =
     TestCase (do writeProcessed fp
+                 oldDir <- getCurrentDirectory
+                 setCurrentDirectory cd
                  r <- robustTest fp
+                 setCurrentDirectory oldDir
                  case rep r of
                   Failure s -> writeAppFailure (file r ++ "\n" ++ s) >> exitFailure
                   Success v -> do
@@ -176,3 +187,4 @@ writeFailure fp db = do
       outname     = takeFileName fp <.> "out"
   (fname, handle) <- openTempFile outdir outname
   (hPutStr handle db >> hClose handle)
+
