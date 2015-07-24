@@ -1,1 +1,1 @@
-import A(B) ; import A(C)
+import A (B, C) ;
