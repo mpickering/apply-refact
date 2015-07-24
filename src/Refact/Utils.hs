@@ -4,7 +4,7 @@
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE GADTs  #-}
 {-# LANGUAGE RankNTypes  #-}
-{-# LANGUAGE DeriveDataTypeable  #-}
+
 module Refact.Utils ( -- * Synonyms
                       Module
                     , Stmt
@@ -36,7 +36,7 @@ import qualified SrcLoc as GHC
 import qualified RdrName as GHC
 import qualified ApiAnnotation as GHC
 import qualified FastString    as GHC
-import qualified GHC           as GHC hiding (parseModule)
+import qualified GHC hiding (parseModule)
 import HsImpExp
 import Control.Monad.State
 
@@ -78,16 +78,16 @@ replace old new inp parent anns = do
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
   oldDelta <- annEntryDelta  <$> Map.lookup parent anns
-  return $ (Map.insert inp (combine oldDelta oldan newan)) anns
+  return $ Map.insert inp (combine oldDelta oldan newan) anns
 
 combine :: DeltaPos -> Annotation -> Annotation -> Annotation
 combine oldDelta oldann newann =
   Ann { annEntryDelta = newEntryDelta
       , annPriorComments = annPriorComments oldann ++ annPriorComments newann
       , annFollowingComments = annFollowingComments oldann ++ annFollowingComments newann
-      , annsDP = (annsDP newann ++ extraComma (annsDP oldann))
-      , annSortKey = (annSortKey newann)
-      , annCapturedSpan = (annCapturedSpan newann)}
+      , annsDP = annsDP newann ++ extraComma (annsDP oldann)
+      , annSortKey = annSortKey newann
+      , annCapturedSpan = annCapturedSpan newann}
   where
     extraComma [] = []
     extraComma (last -> x) = case fst x of
@@ -144,9 +144,7 @@ modifyAnnKey m e1 e2 = e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAn
 replaceAnnKey ::
   Anns -> AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns
 replaceAnnKey a old new inp deltainfo =
-  case replace old new inp deltainfo a  of
-    Nothing -> a
-    Just a' -> a'
+  fromMaybe a (replace old new inp deltainfo a)
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan

@@ -129,7 +129,7 @@ optionsWithHelp
 main :: IO ()
 main = do
   o@Options{..} <- execParser optionsWithHelp
-  when (optionsVersion) (putStrLn ("v" ++ showVersion version) >> exitSuccess)
+  when optionsVersion (putStrLn ("v" ++ showVersion version) >> exitSuccess)
   case optionsTarget of
     Nothing -> do
       (fp, hin) <- openTempFile "./" "stdin"
@@ -174,13 +174,13 @@ filterFilename = do
 runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
-  when (verb == Loud) (traceM $ "Parsing module")
+  when (verb == Loud) (traceM "Parsing module")
   (as, m) <- either (error . show) (uncurry doFix) <$> parseModule file
   when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
   path <- canonicalizePath file
   when (verb == Loud) (traceM $ "Getting hints from " ++ path)
   rawhints <- getHints path
-  when (verb == Loud) (traceM $ "Got raw hints")
+  when (verb == Loud) (traceM "Got raw hints")
   let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
@@ -231,7 +231,7 @@ refactoringLoop as m (desc, rs) =
           "y" -> let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
                  in do
                   exactPrintWithAnns r2 r1 `seq` return ()
-                  return $ (r1, r2)
+                  return (r1, r2)
           _   -> do putStrLn "Skipping hint"
                     return (as, m)
 

@@ -75,7 +75,7 @@ mkOpAppRn fs e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
   = do
       new_e <- L loc' <$> mkOpAppRn fs neg_arg op2 fix2 e2
       moveDelta (mkAnnKey neg_arg) (mkAnnKey new_e)
-      return $ (NegApp new_e neg_name)
+      return (NegApp new_e neg_name)
   where
     loc' = combineLocs neg_arg e2
     (nofix_error, associate_right) = compareFixity negateFixity fix2

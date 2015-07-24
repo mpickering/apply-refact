@@ -63,7 +63,7 @@ runRefactoring as m r@Replace{}  = do
     Import -> replaceWorker as m parseImport (doGenReplacement m) seed r
 
 runRefactoring as m ModifyComment{..} =
-    return $ (Map.map go as, m)
+    return (Map.map go as, m)
     where
       go a@(Ann{ annPriorComments, annsDP }) =
         a { annsDP = map changeComment annsDP
@@ -78,14 +78,14 @@ runRefactoring as m Delete{rtype, pos} = do
             Stmt -> doDeleteStmt ((/= pos) . getLoc)
             Import -> doDeleteImport ((/= pos) . getLoc)
             _ -> id
-  return $ (as, f m)
+  return (as, f m)
   {-
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
  -}
 runRefactoring as m InsertComment{..} =
   let exprkey = mkAnnKey (findDecl m pos) in
-  return $ (insertComment exprkey newComment as, m)
+  return (insertComment exprkey newComment as, m)
 runRefactoring as m RemoveAsKeyword{..} =
   return (as, removeAsKeyword m)
   where
@@ -196,7 +196,7 @@ doGenReplacement m p new old =
   if p old then do
                   s <- get
                   let (v, st) = runState (modifyAnnKey m old new) (fst s)
-                  modify (\_ -> (st, True))
+                  modify (const (st, True))
                   return v
            else return old
 
@@ -212,9 +212,9 @@ replaceWorker as m parser r seed Replace{..} =
       (relat, template) = case p orig of
                               Right xs -> xs
                               Left err -> error (show err)
-      (newExpr, newAnns) = (runState (substTransform m subts template) (mergeAnns as relat))
+      (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       replacementPred (GHC.L l _) = l == replExprLocation
-      transformation = (everywhereM (mkM (r replacementPred newExpr)))
+      transformation = everywhereM (mkM (r replacementPred newExpr))
    in case runState (transformation m) (newAnns, False) of
         (finalM, (finalAs, True)) -> trace "Success" (finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
