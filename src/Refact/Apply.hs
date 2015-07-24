@@ -186,11 +186,16 @@ doGenReplacement :: Data ast
               -> (GHC.Located ast -> Bool)
               -> GHC.Located ast
               -> GHC.Located ast
-              -> M (GHC.Located ast)
+              -> State (Anns, Bool) (GHC.Located ast)
 doGenReplacement m p new old =
-  if p old then modifyAnnKey m old new else return old
+  if p old then do
+                  s <- get
+                  let (v, st) = runState (modifyAnnKey m old new) (fst s)
+                  modify (\_ -> (st, True))
+                  return v
+           else return old
 
-type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> M (GHC.Located a)
+type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> State (Anns, Bool) (GHC.Located a)
 
 replaceWorker :: (Annotate a) => Anns -> Module
               -> Parser (GHC.Located a) -> Repl a -> Int
@@ -202,12 +207,15 @@ replaceWorker as m parser r seed Replace{..} =
       (relat, template) = case p orig of
                               Right xs -> xs
                               Left err -> error (show err)
-      (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
+      (newExpr, newAnns) = (runState (substTransform m subts template) (mergeAnns as relat))
       replacementPred (GHC.L l _) = l == replExprLocation
-      transformation = everywhereM (mkM (r replacementPred newExpr))
-      (final, finalanns) = runState (transformation m) newAnns
-   in (finalanns, final)
+      transformation = (everywhereM (mkM (r replacementPred newExpr)))
+   in case runState (transformation m) (newAnns, False) of
+        (finalM, (finalAs, True)) -> trace "Success" (finalAs, finalM)
+        -- Failed to find a replacment so don't make any changes
+        _ -> trace "Failure" (as, m)
 replaceWorker as m _ _ _ _  = (as, m)
+
 
 
 -- Find the largest expression with a given SrcSpan
