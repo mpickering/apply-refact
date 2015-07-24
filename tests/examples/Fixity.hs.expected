@@ -1,4 +1,4 @@
-simple = h <$> f ( g $ h t)
+simple = h <$> f (g $ h t)
 
 simple = h <$> (f :+ g :+ h t)
 

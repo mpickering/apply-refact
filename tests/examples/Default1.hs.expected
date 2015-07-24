@@ -1,1 +1,1 @@
-yes = foo . bar .concatMap f . baz . bar
+yes = foo . bar . concatMap f . baz . bar

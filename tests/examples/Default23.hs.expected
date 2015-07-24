@@ -1,1 +1,1 @@
-yes = readFile $head args
+yes = readFile $ head args

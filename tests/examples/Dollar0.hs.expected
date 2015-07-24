@@ -1,1 +1,1 @@
-yes = concat $concatMap f x
+yes = concat $ concatMap f x

@@ -1,1 +1,1 @@
-test = foo .map
+test = foo . map
