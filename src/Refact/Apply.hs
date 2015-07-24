@@ -42,7 +42,7 @@ import Data.Maybe
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
-                    , mergeAnns, modifyAnnKey, replaceAnnKey)
+                    , mergeAnns, modifyAnnKey, replaceAnnKey, Import)
 
 import Debug.Trace
 
@@ -64,6 +64,7 @@ runRefactoring as m r@Replace{}  = do
     Bind -> replaceWorker as m parseBind (doGenReplacement m) seed r
     R.Match ->  replaceWorker as m parseMatch (doGenReplacement m) seed r
     ModuleName -> replaceWorker as m (parseModuleName (pos r))(doGenReplacement m) seed r
+    Import -> replaceWorker as m parseImport (doGenReplacement m) seed r
 
 runRefactoring as m ModifyComment{..} =
     return $ (Map.map go as, m)
@@ -76,8 +77,12 @@ runRefactoring as m ModifyComment{..} =
       change old@Comment{..}= if ss2pos commentIdentifier == ss2pos pos
                                           then old { commentContents = newComment}
                                           else old
-runRefactoring as m Delete{pos} =
-  return $ (as, doDelete ((/= pos) . getLoc) m)
+runRefactoring as m Delete{rtype, pos} = do
+  let f = case rtype of
+            Stmt -> doDeleteStmt ((/= pos) . getLoc)
+            Import -> doDeleteImport ((/= pos) . getLoc)
+            _ -> id
+  return $ (as, f m)
   {-
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
@@ -259,11 +264,11 @@ findLargestExpression ss e@(GHC.L l _) =
 
 -- Deletion from a list
 
-deleteFromList :: (Stmt -> Bool) -> [Stmt] -> [Stmt]
-deleteFromList = filter
+doDeleteStmt :: Data a => (Stmt -> Bool) -> a -> a
+doDeleteStmt p = everywhere (mkT (filter p))
 
-doDelete :: Data a => (Stmt -> Bool) -> a -> a
-doDelete p = everywhere (mkT (deleteFromList p))
+doDeleteImport :: Data a => (Import -> Bool) -> a -> a
+doDeleteImport p = everywhere (mkT (filter p))
 
 -- Renaming
 

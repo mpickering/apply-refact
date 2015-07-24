@@ -13,6 +13,7 @@ module Refact.Utils ( -- * Synonyms
                     , Name
                     , Pat
                     , Type
+                    , Import
                     -- * Monad
                     , M
                     -- * Utility
@@ -38,6 +39,7 @@ import qualified RdrName as GHC
 import qualified ApiAnnotation as GHC
 import qualified FastString    as GHC
 import qualified GHC           as GHC hiding (parseModule)
+import HsImpExp
 import Control.Monad.State
 
 import qualified Data.Map as Map
@@ -70,6 +72,8 @@ type Pat = GHC.LPat GHC.RdrName
 type Name = GHC.Located GHC.RdrName
 
 type Stmt = ExprLStmt GHC.RdrName
+
+type Import = LImportDecl GHC.RdrName
 
 
 -- | Replaces an old expression with a new expression
