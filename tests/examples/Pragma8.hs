@@ -1,2 +1,2 @@
-{-# OPTIONS_GHC -cpp #-}
-{-# LANGUAGE CPP, NoMonomorphismRestriction #-}
+{-# OPTIONS_GHC -XGADTs #-}
+{-# LANGUAGE GADTs, NoMonomorphismRestriction #-}

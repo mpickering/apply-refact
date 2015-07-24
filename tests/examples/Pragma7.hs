@@ -1,1 +1,1 @@
-{-# OPTIONS_GHC -cpp -main-is Baz #-}
+{-# OPTIONS_GHC -XGADTs -main-is Baz #-}
