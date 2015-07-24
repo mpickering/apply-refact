@@ -42,6 +42,7 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsStep          = False
                   , optionsRoundtrip     = False
                   , optionsDebug         = False
+                  , optionsVersion       = False
                   }
           action = hSilence [stderr] $ runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]

@@ -10,11 +10,9 @@ import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, Fixit
 import HsExpr
 import RdrName
 import OccName
-import Name
 import PlaceHolder
 import Data.Generics hiding (Fixity)
 import Data.Maybe
-import Language.Haskell.GHC.ExactPrint.Utils
 import Language.Haskell.GHC.ExactPrint.Types
 
 import Control.Monad.State
@@ -26,12 +24,13 @@ doFix :: Anns -> Module -> (Anns, Module)
 doFix as m = swap $ runState (everywhereM (mkM expFix) m) as
 
 expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
-expFix (L loc (OpApp l op p r)) = do
+expFix (L loc (OpApp l op _ r)) = do
   newExpr <- mkOpAppRn baseFixities l op (findFixity baseFixities op) r
   return (L loc newExpr)
 
 expFix e = return e
 
+getIdent :: Expr -> String
 getIdent (unLoc -> HsVar n) = occNameString . rdrNameOcc $ n
 getIdent _ = error "Must be HsVar"
 
@@ -83,7 +82,7 @@ mkOpAppRn fs e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
 
 ---------------------------
 --      e1 `op` - neg_arg
-mkOpAppRn fs e1 op1 fix1 e2@(L _ (NegApp _ _))     -- NegApp can occur on the right
+mkOpAppRn _ e1 op1 fix1 e2@(L _ (NegApp _ _))     -- NegApp can occur on the right
   | not associate_right                 -- We *want* right association
   = return $ OpApp e1 op1 PlaceHolder e2
   where
@@ -91,7 +90,7 @@ mkOpAppRn fs e1 op1 fix1 e2@(L _ (NegApp _ _))     -- NegApp can occur on the ri
 
 ---------------------------
 --      Default case
-mkOpAppRn fs e1 op fix e2                  -- Default case, no rearrangment
+mkOpAppRn _ e1 op _ e2                  -- Default case, no rearrangment
   = return $ OpApp e1 op PlaceHolder e2
 
 findFixity :: [(String, Fixity)] -> Expr -> Fixity

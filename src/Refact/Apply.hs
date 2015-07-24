@@ -18,31 +18,27 @@ import HsExpr as GHC hiding (Stmt)
 import qualified HsBinds as GHC
 import qualified HsDecls as GHC
 import HsImpExp
-import FastString
 import qualified Module as GHC
 import HsSyn hiding (Pat, Stmt)
 import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
 import qualified OccName as GHC
-import qualified Outputable as GHC
 import Data.Generics
 import Control.Monad.State
-import Data.Tuple
 
 import qualified Data.Map as Map
 
 import System.IO.Unsafe
 
 import Control.Arrow
-import Control.Monad.State
 
 import Data.Maybe
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
-                    , mergeAnns, modifyAnnKey, replaceAnnKey, Import)
+                    , modifyAnnKey, replaceAnnKey, Import)
 
 import Debug.Trace
 
@@ -101,7 +97,7 @@ runRefactoring as m RemoveAsKeyword{..} =
 
 
 parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
-parseModuleName ss _ (mkFastString -> fname) s =
+parseModuleName ss _ _ s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
       newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
   in return (newAnns, newMN)
@@ -119,7 +115,7 @@ parseMatch dyn fname s =
       case GHC.mg_alts fun_matches of
            [x] -> Right (as, x)
            _   -> Left (l, "Not a single match")
-    Right (as, GHC.L l _) -> Left (l, "Not a funbind")
+    Right (_, GHC.L l _) -> Left (l, "Not a funbind")
     Left e -> Left e
 
 -- Substitute variables into templates

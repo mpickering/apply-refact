@@ -28,8 +28,6 @@ module Refact.Utils ( -- * Synonyms
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
-import Language.Haskell.GHC.ExactPrint.Utils
-import Language.Haskell.GHC.ExactPrint.Transform (mergeAnns)
 
 import Data.Data
 import HsExpr as GHC hiding (Stmt)
@@ -51,9 +49,7 @@ import Refact.Types hiding (SrcSpan)
 
 import Data.Generics.Schemes
 import Unsafe.Coerce
-import Data.Typeable
 
-import Debug.Trace
 
 -- Types
 --
@@ -118,7 +114,7 @@ findParentWorker oldSS a
           else Nothing
   | otherwise = Nothing
   where
-    (con, ~[x, y]) = splitTyConApp (typeOf a)
+    (con, ~[x, _]) = splitTyConApp (typeOf a)
     ss :: GHC.SrcSpan
     ss = gmapQi 0 unsafeCoerce a
     cn = gmapQi 1 (CN . show . toConstr) a
@@ -139,7 +135,7 @@ moveAnns ((_, dp): _) ((kw, _):xs) = (kw,dp) : xs
 -- For example, this function will ensure the correct relative position and
 -- make sure that any trailing semi colons or commas are transferred.
 modifyAnnKey :: (Data old, Data new) => Module -> Located old -> Located new -> M (Located new)
-modifyAnnKey m e1 e2 = e2 <$ modify (\m -> replaceAnnKey m (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
+modifyAnnKey m e1 e2 = e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
   where
     parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) m)
 
