@@ -1,2 +1,1 @@
-{-# LANGUAGE NoMonomorphismRestriction, CPP #-}
-
+{-# LANGUAGE NoMonomorphismRestriction, GADTs #-}

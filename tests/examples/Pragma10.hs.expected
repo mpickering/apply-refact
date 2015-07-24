@@ -1,3 +1,2 @@
-{-# LANGUAGE CPP, GADTs #-}
-
+{-# LANGUAGE DataKinds, GADTs #-}
 
