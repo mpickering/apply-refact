@@ -52,15 +52,15 @@ runRefactoring :: Anns -> Module -> Refactoring GHC.SrcSpan -> State Int (Anns, 
 runRefactoring as m r@Replace{}  = do
   seed <- getSeed
   return $ case rtype r of
-    Expr -> replaceWorker as m parseExpr (doGenReplacement m) seed r
-    Decl -> replaceWorker as m parseDecl (doGenReplacement m) seed r
-    Type -> replaceWorker as m parseType (doGenReplacement m) seed r
-    Pattern -> replaceWorker as m parsePattern (doGenReplacement m) seed r
-    Stmt -> replaceWorker as m parseStmt (doGenReplacement m) seed r
-    Bind -> replaceWorker as m parseBind (doGenReplacement m) seed r
-    R.Match ->  replaceWorker as m parseMatch (doGenReplacement m) seed r
-    ModuleName -> replaceWorker as m (parseModuleName (pos r))(doGenReplacement m) seed r
-    Import -> replaceWorker as m parseImport (doGenReplacement m) seed r
+    Expr -> replaceWorker as m parseExpr seed r
+    Decl -> replaceWorker as m parseDecl seed r
+    Type -> replaceWorker as m parseType seed r
+    Pattern -> replaceWorker as m parsePattern seed r
+    Stmt -> replaceWorker as m parseStmt seed r
+    Bind -> replaceWorker as m parseBind seed r
+    R.Match ->  replaceWorker as m parseMatch seed r
+    ModuleName -> replaceWorker as m (parseModuleName (pos r)) seed r
+    Import -> replaceWorker as m parseImport seed r
 
 runRefactoring as m ModifyComment{..} =
     return (Map.map go as, m)
@@ -200,12 +200,10 @@ doGenReplacement m p new old =
                   return v
            else return old
 
-type Repl a = (GHC.Located a -> Bool) -> GHC.Located a -> GHC.Located a -> State (Anns, Bool) (GHC.Located a)
-
 replaceWorker :: (Annotate a) => Anns -> Module
-              -> Parser (GHC.Located a) -> Repl a -> Int
+              -> Parser (GHC.Located a) -> Int
               -> Refactoring GHC.SrcSpan -> (Anns, Module)
-replaceWorker as m parser r seed Replace{..} =
+replaceWorker as m parser seed Replace{..} =
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
       p s = unsafePerformIO (withDynFlags (\d -> parser d uniqueName s))
@@ -214,12 +212,12 @@ replaceWorker as m parser r seed Replace{..} =
                               Left err -> error (show err)
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       replacementPred (GHC.L l _) = l == replExprLocation
-      transformation = everywhereM (mkM (r replacementPred newExpr))
+      transformation = everywhereM (mkM (doGenReplacement m replacementPred newExpr))
    in case runState (transformation m) (newAnns, False) of
         (finalM, (finalAs, True)) -> trace "Success" (finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
         _ -> trace "Failure" (as, m)
-replaceWorker as m _ _ _ _  = (as, m)
+replaceWorker as m _ _ _  = (as, m)
 
 
 
