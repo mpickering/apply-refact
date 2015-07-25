@@ -24,6 +24,7 @@ import qualified SrcLoc as GHC
 
 import Options.Applicative
 import Data.Maybe
+import Control.Monad.Trans.Maybe
 import Data.List hiding (find)
 import Data.Ord
 
@@ -114,13 +115,16 @@ options =
            <> help "Enable verbose mode")
     <*>
     switch (short 's'
+           <> long "step"
            <> help "Ask before applying each hint")
     <*>
     switch (long "debug"
-           <> help "Output the GHC AST for debugging")
+           <> help "Output the GHC AST for debugging"
+           <> internal)
     <*>
     switch (long "roundtrip"
-           <> help "Run ghc-exactprint on the file")
+           <> help "Run ghc-exactprint on the file"
+           <> internal)
     <*>
     switch (long "version"
            <> help "Display version number")
@@ -168,7 +172,6 @@ filterDirectory =
   where
     p x
       | "." `isPrefixOf` x = False
-      | "builds" `isPrefixOf` x = False
       | otherwise = True
 
 filterFilename :: FindClause Bool
@@ -178,9 +181,7 @@ filterFilename = do
   return (ext == ".hs" && p fname)
   where
     p x
-      | "refactored" `isInfixOf` x = False
       | "Setup.hs" `isInfixOf` x = False
-      | "out.hs"   `isInfixOf` x = False
       | otherwise                 = True
 
 
@@ -211,7 +212,7 @@ runPipe Options{..} file = do
   when (verb == Loud) (traceM $ show filtRefacts)
       -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
-                   then foldM (uncurry refactoringLoop) (as, m) filtRefacts
+                   then runMaybeT (refactoringLoop as m filtRefacts) >>= return . fromMaybe (as, m)
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   let output = exactPrintWithAnns res ares
@@ -221,7 +222,6 @@ runPipe Options{..} file = do
            Nothing -> putStr output
            Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
---            writeFile (f <.> "out") (showAnnData ares 0 res)
             writeFile f output
 
 removeOverlap :: Verbosity -> [(String, [Refactoring GHC.SrcSpan])] -> [(String, [Refactoring GHC.SrcSpan])]
@@ -243,19 +243,41 @@ removeOverlap verb ideas = map (second (filter (`notElem` bad))) ideas
                     || (GHC.srcSpanStart s1 == GHC.srcSpanStart s2
                         && GHC.srcSpanEnd s1 <= GHC.srcSpanEnd s2)
 
-refactoringLoop :: Anns -> Module -> (String, [Refactoring GHC.SrcSpan])
-                -> IO (Anns, Module)
-refactoringLoop as m (desc, rs) =
-  do putStrLn desc
-     putStrLn "Apply hint [y, N]"
-     inp <- getLine
-     case inp of
-          "y" -> let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
-                 in do
-                  exactPrintWithAnns r2 r1 `seq` return ()
-                  return (r1, r2)
-          _   -> do putStrLn "Skipping hint"
-                    return (as, m)
+data LoopOption = LoopOption
+                    { desc :: String
+                    , perform :: (MaybeT IO (Anns, Module)) }
+
+refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
+                -> MaybeT IO (Anns, Module)
+refactoringLoop as m [] = return (as, m)
+refactoringLoop as m hints@((hintDesc, rs): rss) =
+  do inp <- liftIO $ do
+        putStrLn hintDesc
+        putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
+        -- In case that the input also comes from stdin
+        withFile "/dev/tty" ReadMode hGetLine
+     case lookup inp opts of
+          Just opt   -> perform opt
+          Nothing    -> loopHelp
+  where
+    opts =
+      [ ("y", LoopOption "Apply current hint" yAction)
+      , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
+      , ("q", LoopOption "Apply no further hints" (return (as, m)))
+      , ("d", LoopOption "Discard previous changes" mzero )
+      , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrintWithAnns m as))
+                                              >> refactoringLoop as m hints))
+      , ("?", LoopOption "Show this help menu" loopHelp)]
+    loopHelp = do
+            liftIO . putStrLn . unlines . map mkLine $ opts
+            refactoringLoop as m hints
+    mkLine (c, opt) = c ++ " - " ++ desc opt
+    -- Force to force bottoms
+    yAction =
+      let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
+        in do
+          exactPrintWithAnns r2 r1 `seq` return ()
+          refactoringLoop r1 r2 rss
 
 
 getHints :: Maybe FilePath -> IO String
