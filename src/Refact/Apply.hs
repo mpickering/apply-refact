@@ -3,7 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
-module Refact.Apply  where
+module Refact.Apply (runRefactoring)  where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
@@ -37,7 +37,7 @@ import Data.Maybe
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Module, Stmt, Pat, Name, Decl, M, Expr, Type
+import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type
                     , modifyAnnKey, replaceAnnKey, Import)
 
 import Debug.Trace
@@ -48,7 +48,8 @@ import Debug.Trace
 getSeed :: State Int Int
 getSeed = get <* modify (+1)
 
-runRefactoring :: Anns -> Module -> Refactoring GHC.SrcSpan -> State Int (Anns, Module)
+-- | Peform a @Refactoring@.
+runRefactoring :: Data a => Anns -> a -> Refactoring GHC.SrcSpan -> State Int (Anns, a)
 runRefactoring as m r@Replace{}  = do
   seed <- getSeed
   return $ case rtype r of
@@ -120,7 +121,7 @@ parseMatch dyn fname s =
 
 -- Substitute variables into templates
 
-substTransform :: Data a => Module -> [(String, GHC.SrcSpan)] -> a -> M a
+substTransform :: (Data a, Data b) => b -> [(String, GHC.SrcSpan)] -> a -> M a
 substTransform m ss = everywhereM (mkM (exprSub m ss)
                                     `extM` typeSub m ss
                                     `extM` patSub m ss
@@ -128,27 +129,27 @@ substTransform m ss = everywhereM (mkM (exprSub m ss)
                                     `extM` identSub m ss
                                     )
 
-stmtSub :: Module -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
+stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
 stmtSub m subs old@(GHC.L _ (BodyStmt (GHC.L _ (HsVar name)) _ _ _) ) =
   resolveRdrName m (findStmt m) old subs name
 stmtSub _ _ e = return e
 
-patSub :: Module -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
+patSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
 patSub m subs old@(GHC.L _ (VarPat name)) =
   resolveRdrName m (findPat m) old subs name
 patSub _ _ e = return e
 
-typeSub :: Module -> [(String, GHC.SrcSpan)] -> Type -> M Type
+typeSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Type -> M Type
 typeSub m subs old@(GHC.L _ (HsTyVar name)) =
   resolveRdrName m (findType m) old subs name
 typeSub _ _ e = return e
 
-exprSub :: Module -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
+exprSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
 exprSub m subs old@(GHC.L _ (HsVar name)) =
   resolveRdrName m (findExpr m) old subs name
 exprSub _ _ e = return e
 
-identSub :: Module -> [(String, GHC.SrcSpan)] -> Name -> M Name
+identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Name -> M Name
 identSub m subs old@(GHC.L _ name) =
   resolveRdrName' subst (findName m) old subs name
   where
@@ -168,8 +169,8 @@ resolveRdrName' g f old subs name =
               Nothing -> return old
     _ -> return old
 
-resolveRdrName :: Data old
-               => Module
+resolveRdrName :: (Data old, Data a)
+               => a
                -> (SrcSpan -> Located old)
                -> Located old
                -> [(String, SrcSpan)]
@@ -186,8 +187,8 @@ insertComment k s as =
                           , annEntryDelta = DP (1,0) }) k as
 
 
-doGenReplacement :: Data ast
-              => Module
+doGenReplacement :: (Data ast, Data a)
+              => a
               -> (GHC.Located ast -> Bool)
               -> GHC.Located ast
               -> GHC.Located ast
@@ -200,9 +201,9 @@ doGenReplacement m p new old =
                   return v
            else return old
 
-replaceWorker :: (Annotate a) => Anns -> Module
+replaceWorker :: (Annotate a, Data mod) => Anns -> mod
               -> Parser (GHC.Located a) -> Int
-              -> Refactoring GHC.SrcSpan -> (Anns, Module)
+              -> Refactoring GHC.SrcSpan -> (Anns, mod)
 replaceWorker as m parser seed Replace{..} =
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
@@ -222,28 +223,28 @@ replaceWorker as m _ _ _  = (as, m)
 
 
 -- Find the largest expression with a given SrcSpan
-findGen :: forall ast . Data ast => String -> Module -> SrcSpan -> GHC.Located ast
+findGen :: forall ast a . (Data ast, Data a) => String -> a -> SrcSpan -> GHC.Located ast
 findGen s m ss = fromMaybe (error (s ++ " " ++ showGhc ss)) (doTrans m)
   where
-    doTrans :: Module -> Maybe (GHC.Located ast)
+    doTrans :: a -> Maybe (GHC.Located ast)
     doTrans = something (mkQ Nothing (findLargestExpression ss))
 
-findExpr :: Module -> SrcSpan -> Expr
+findExpr :: Data a => a -> SrcSpan -> Expr
 findExpr = findGen "expr"
 
-findPat :: Module -> SrcSpan -> Pat
+findPat :: Data a => a -> SrcSpan -> Pat
 findPat = findGen "pat"
 
-findType :: Module -> SrcSpan -> Type
+findType :: Data a => a -> SrcSpan -> Type
 findType = findGen "type"
 
-findDecl :: Module -> SrcSpan -> Decl
+findDecl :: Data a => a -> SrcSpan -> Decl
 findDecl = findGen "decl"
 
-findStmt :: Module -> SrcSpan -> Stmt
+findStmt :: Data a => a -> SrcSpan -> Stmt
 findStmt = findGen "stmt"
 
-findName :: Module -> SrcSpan -> (Name, Pat)
+findName :: Data a => a -> SrcSpan -> (Name, Pat)
 findName m ss =
   case findPat m ss of
        p@(GHC.L l (VarPat n)) -> (GHC.L l n, p)
@@ -264,6 +265,7 @@ doDeleteStmt p = everywhere (mkT (filter p))
 doDeleteImport :: Data a => (Import -> Bool) -> a -> a
 doDeleteImport p = everywhere (mkT (filter p))
 
+{-
 -- Renaming
 
 doRename :: [(String, String)] -> Module -> Module
@@ -274,3 +276,4 @@ doRename ss = everywhere (mkT rename)
       where
           (s, n) = (GHC.occNameString v, GHC.occNameSpace v)
           s' = fromMaybe s (lookup s ss)
+-}

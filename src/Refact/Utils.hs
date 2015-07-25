@@ -120,21 +120,12 @@ findParentWorker oldSS a
     cn = gmapQi 1 (CN . show . toConstr) a
 
 
-
-{-
--- | Shift the first output annotation into the correct place
-moveAnns :: [(KeywordId, DeltaPos)] -> [(KeywordId, DeltaPos)] -> [(KeywordId, DeltaPos)]
-moveAnns [] xs        = xs
-moveAnns _  []        = []
-moveAnns ((_, dp): _) ((kw, _):xs) = (kw,dp) : xs
--}
-
 -- | Perform the necessary adjustments to annotations when replacing
 -- one Located thing with another Located thing.
 --
 -- For example, this function will ensure the correct relative position and
 -- make sure that any trailing semi colons or commas are transferred.
-modifyAnnKey :: (Data old, Data new) => Module -> Located old -> Located new -> M (Located new)
+modifyAnnKey :: (Data old, Data new, Data mod) => mod -> Located old -> Located new -> M (Located new)
 modifyAnnKey m e1 e2 = e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
   where
     parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) m)

@@ -19,7 +19,8 @@ import Control.Monad.State
 import qualified Data.Map as Map
 import Data.Tuple
 
--- | Rearrange infix expressions to account for fixity
+-- | Rearrange infix expressions to account for fixity.
+-- The set of fixities is wired in and includes all fixities in base.
 doFix :: Anns -> Module -> (Anns, Module)
 doFix as m = swap $ runState (everywhereM (mkM expFix) m) as
 
