@@ -21,7 +21,7 @@ install:
  - cabal sandbox init
  - echo "$(ghc --version) [$(ghc --print-project-git-commit-id 2> /dev/null || echo '?')]"
  - travis_retry cabal update
- - git clone https://github.com/mpickering/haskell-src-exts
+ - git clone https://github.com/haskell-suite/haskell-src-exts
  - cabal sandbox add-source ./haskell-src-exts
  - cabal install --only-dependencies --enable-tests --enable-benchmarks
  - git clone https://github.com/mpickering/hlint
