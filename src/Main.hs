@@ -44,6 +44,10 @@ import Data.Version
 
 import Debug.Trace
 
+import SrcLoc
+import Text.Read
+import Data.Char
+
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
 parseVerbosity :: Monad m => String -> m Verbosity
@@ -53,6 +57,15 @@ parseVerbosity s =
              "1" -> Normal
              "2" -> Loud
              _   -> Normal
+
+parsePos :: Monad m => String -> m (Int, Int)
+parsePos s =
+  case span isDigit s of
+    (line, ',':col) ->
+      case (,) <$> readMaybe line <*> readMaybe col of
+        Just l -> return l
+        Nothing -> fail "Invaid input"
+    _ -> fail "Invalid input"
 
 data Target = StdIn | File FilePath
 
@@ -67,6 +80,7 @@ data Options = Options
   , optionsDebug :: Bool
   , optionsRoundtrip :: Bool
   , optionsVersion :: Bool
+  , optionsPos     :: Maybe (Int, Int)
   }
 
 options :: Parser Options
@@ -108,6 +122,13 @@ options =
     <*>
     switch (long "version"
            <> help "Display version number")
+    <*>
+    option (Just <$> (str >>= parsePos))
+           (long "pos"
+           <> value Nothing
+           <> metavar "<line>,<col>"
+           <> help "Apply hints relevant to a specific position")
+
 
 optionsWithHelp :: ParserInfo Options
 optionsWithHelp
@@ -125,7 +146,7 @@ main = do
   o@Options{..} <- execParser optionsWithHelp
   when optionsVersion (putStrLn ("v" ++ showVersion version) >> exitSuccess)
   case optionsTarget of
-    Nothing -> do
+    Nothing ->
       withSystemTempFile "stdin"  (\fp hin -> do
         getContents >>= hPutStrLn hin >> hClose hin
         runPipe o fp)
@@ -178,8 +199,12 @@ runPipe Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
-      filtRefacts = removeOverlap refacts
-  traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
+      noOverlapRefacts = removeOverlap refacts
+      posFilter = maybe id (\x -> filter (flip spans x . pos)) optionsPos
+      filtRefacts = map (second posFilter) noOverlapRefacts
+
+
+  when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
   when (verb == Loud) (traceM $ show filtRefacts)
       -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
