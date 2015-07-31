@@ -215,9 +215,9 @@ replaceWorker as m parser seed Replace{..} =
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (doGenReplacement m replacementPred newExpr))
    in case runState (transformation m) (newAnns, False) of
-        (finalM, (finalAs, True)) -> trace "Success" (finalAs, finalM)
+        (finalM, (finalAs, True)) -> (finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
-        _ -> trace "Failure" (as, m)
+        _ -> (as, m)
 replaceWorker as m _ _ _  = (as, m)
 
 

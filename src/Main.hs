@@ -70,11 +70,11 @@ parsePos s =
 data Target = StdIn | File FilePath
 
 data Options = Options
-  { optionsTarget :: Maybe FilePath -- ^ Where to process hints
-  , optionsInplace :: Bool
-  , optionsOutput :: Maybe FilePath -- ^ Whether to overwrite the file inplace
+  { optionsTarget   :: Maybe FilePath -- ^ Where to process hints
+  , optionsRefactFile :: Maybe FilePath -- ^ The refactorings to process
+  , optionsInplace  :: Bool
+  , optionsOutput   :: Maybe FilePath -- ^ Whether to overwrite the file inplace
   , optionsSuggestions :: Bool -- ^ Whether to perform suggestions
-  , optionsHlintOptions :: String -- ^ Commands to pass to hlint
   , optionsVerbosity :: Verbosity
   , optionsStep :: Bool -- ^ Ask before applying each hint
   , optionsDebug :: Bool
@@ -88,6 +88,13 @@ options =
   Options <$>
     optional (argument str (metavar "TARGET"))
     <*>
+    option (Just <$> str)
+      (long "refact-file"
+      <> short 'h'
+      <> value Nothing
+      <> help "A file which specifies which refactorings to perform")
+
+    <*>
     switch (long "inplace"
            <> short 'i'
            <> help "Whether to overwrite the target inplace")
@@ -99,11 +106,6 @@ options =
     <*>
     switch (long "replace-suggestions"
            <> help "Whether to process suggestions as well as errors")
-    <*>
-    strOption (long "hlint-options"
-              <> help "Options to pass to hlint"
-              <> metavar "OPTS"
-              <> value "" )
     <*>
     option (str >>= parseVerbosity)
            ( long "verbosity"
@@ -135,8 +137,8 @@ optionsWithHelp
   =
     info (helper <*> options)
           ( fullDesc
-          <> progDesc "Automatically perform hlint suggestions"
-          <> header "apply-refactor" )
+          <> progDesc "Automatically perform refactorings on haskell source file"
+          <> header "refactor" )
 
 
 
@@ -144,7 +146,7 @@ optionsWithHelp
 main :: IO ()
 main = do
   o@Options{..} <- execParser optionsWithHelp
-  when optionsVersion (putStrLn ("v" ++ showVersion version) >> exitSuccess)
+  when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
   case optionsTarget of
     Nothing ->
       withSystemTempFile "stdin"  (\fp hin -> do
@@ -178,7 +180,6 @@ filterFilename = do
     p x
       | "refactored" `isInfixOf` x = False
       | "Setup.hs" `isInfixOf` x = False
-      | "HLint.hs" `isInfixOf` x = False -- HLint config files
       | "out.hs"   `isInfixOf` x = False
       | otherwise                 = True
 
@@ -191,17 +192,19 @@ runPipe Options{..} file = do
   when (verb == Loud) (traceM "Parsing module")
   (as, m) <- either (error . show) (uncurry doFix) <$> parseModule file
   when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
-  path <- canonicalizePath file
-  when (verb == Loud) (traceM $ "Getting hints from " ++ path)
-  rawhints <- getHints path
+  rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
   let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
       noOverlapRefacts = removeOverlap refacts
-      posFilter = maybe id (\x -> filter (flip spans x . pos)) optionsPos
-      filtRefacts = map (second posFilter) noOverlapRefacts
+
+      posFilter (s, rs) =
+        case optionsPos of
+          Nothing -> True
+          Just p  -> any (flip spans p . pos) rs
+      filtRefacts = filter posFilter noOverlapRefacts
 
 
   when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
@@ -215,15 +218,14 @@ runPipe Options{..} file = do
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
-           Nothing -> putStrLn output
+           Nothing -> putStr output
            Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
 --            writeFile (f <.> "out") (showAnnData ares 0 res)
             writeFile f output
 
-removeOverlap :: [(String, [Refactoring GHC.SrcSpan])] -> [(String, [Refactoring GHC.SrcSpan])]
-removeOverlap ideas = map (second (filter (`notElem` bad))) ideas
-
+removeOverlap :: Verbosity -> [(String, [Refactoring GHC.SrcSpan])] -> [(String, [Refactoring GHC.SrcSpan])]
+removeOverlap verb ideas = map (second (filter (`notElem` bad))) ideas
   where
     bad = go rs
     rs = nub $ sortBy (comparing pos) (concatMap snd ideas)
@@ -254,23 +256,7 @@ refactoringLoop as m (desc, rs) =
                     return (as, m)
 
 
-
-
-
--- Run HLint to get the commands
-
-makeCmd :: String -> String
-makeCmd file = "hlint " ++ file ++ " --serialise --cpp-file=dist/build/autogen/cabal_macros.h"
---makeCmd _ = "runghc-7.10.1.20150609 -package-db=.cabal-sandbox/x86_64-osx-ghc-7.10.1.20150609-packages.conf.d/ feeder.hs"
-
-getHints :: FilePath -> IO String
-getHints file = do
-  (_, Just hOut, _, hProc) <- createProcess (
-                                (shell (makeCmd file))
-                                { std_out = CreatePipe }
-                              )
-  r <- hGetContents hOut
-  return $! last r
-  () <$ waitForProcess hProc
-  return r
+getHints :: Maybe FilePath -> IO String
+getHints (Just hintFile) = readFile hintFile
+getHints Nothing = getContents
 
