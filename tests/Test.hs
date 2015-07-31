@@ -14,16 +14,16 @@ import System.IO.Silently
 import System.IO
 
 import Debug.Trace
+import System.Process
 
 
-main = do
-  setCurrentDirectory "tests/examples"
+main =
   defaultMain =<< mkTests <$> findTests
 
 findTests :: IO [FilePath]
 findTests = do
-  files <- getDirectoryContents "./"
-  return $ (filter ((== ".hs") . takeExtension ) files)
+  files <- getDirectoryContents "tests/examples"
+  return $ (map ("tests/examples" </>) . filter ((== ".hs") . takeExtension )) files
 
 
 mkTests :: [FilePath] -> TestTree
@@ -32,19 +32,24 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
     mkTest :: FilePath -> TestTree
     mkTest fp =
       let outfile = fp <.> "out"
+          rfile   = fp <.> "refact"
           topts = Options
                   { optionsTarget       = Just fp
                   , optionsInplace       = False
                   , optionsOutput        = Just outfile
+                  , optionsRefactFile    = Just rfile
                   , optionsSuggestions   = False
-                  , optionsHlintOptions  = ""
                   , optionsVerbosity     = Silent
                   , optionsStep          = False
                   , optionsRoundtrip     = False
                   , optionsDebug         = False
                   , optionsVersion       = False
+                  , optionsPos           = Nothing
                   }
-          action = hSilence [stderr] $ runPipe topts fp
+          action = do
+            (_, str, _) <- readCreateProcessWithExitCode (shell $ "hlint --serialise " ++ fp) ""
+            writeFile rfile str
+            hSilence [stderr] $ runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]
       in goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
 
