@@ -198,7 +198,7 @@ runPipe Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> inp
-      noOverlapRefacts = removeOverlap refacts
+      noOverlapRefacts = removeOverlap verb refacts
 
       posFilter (s, rs) =
         case optionsPos of
@@ -233,7 +233,9 @@ removeOverlap verb ideas = map (second (filter (`notElem` bad))) ideas
     go [_] = []
     go (x:y:xs) =
       if pos x `check` pos y
-        then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
+        then (if (verb > Silent)
+              then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
+              else id)
              -- Discard y, keep x as it may also overlap with the next hint
              y : go (x:xs)
         else go (y:xs)
