@@ -1,4 +1,4 @@
-`apply-refactor` applies refactorings specified by the
+`apply-refact` applies refactorings specified by the
 [`refact`](https://hackage.haskell.org/package/refact) package. It is currently
 integrated into `hlint` to enable the automatic application of suggestions.
 
