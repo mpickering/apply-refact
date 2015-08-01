@@ -186,7 +186,7 @@ runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
   when (verb == Loud) (traceM "Parsing module")
-  (as, m) <- either (error . show) (uncurry doFix) <$> parseModule file
+  (as, m) <- either (error . show) (uncurry applyFixties) <$> parseModule file
   when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")

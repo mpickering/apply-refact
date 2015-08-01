@@ -1,7 +1,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
-module Refact.Fixity (doFix) where
+module Refact.Fixity (applyFixities) where
 
 import SrcLoc
 
@@ -21,8 +21,8 @@ import Data.Tuple
 
 -- | Rearrange infix expressions to account for fixity.
 -- The set of fixities is wired in and includes all fixities in base.
-doFix :: Anns -> Module -> (Anns, Module)
-doFix as m = swap $ runState (everywhereM (mkM expFix) m) as
+applyFixities :: Anns -> Module -> (Anns, Module)
+applyFixities as m = swap $ runState (everywhereM (mkM expFix) m) as
 
 expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
 expFix (L loc (OpApp l op _ r)) = do
