@@ -210,7 +210,7 @@ runPipe Options{..} file = do
                    then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  when (optionsDebug (putStrLn (showAnnData ares 0 res)))
+  when (optionsDebug) (putStrLn (showAnnData ares 0 res))
   let output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
