@@ -36,9 +36,6 @@ library
                , directory
   hs-source-dirs:      src
   default-language:    Haskell2010
-  if impl (ghc < 7.10)
-     buildable: False
-
 
 executable refactor
   main-is: Main.hs
@@ -87,23 +84,3 @@ Test-Suite test
                , silently
                , temporary-rc
                , transformers
-
-executable roundtrip
-  main-is: Roundtrip.hs
-  hs-source-dirs: tests
-  default-language:    Haskell2010
-  if impl (ghc < 7.10)
-      buildable: False
-  build-depends:
-                 HUnit
-               , base
-               , filepath
-               , containers
-               , mtl
-               , ghc-exactprint
-               , process
-               , filemanip
-               , directory
-               , Diff
-  ghc-options:
-    -threaded
