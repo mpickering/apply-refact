@@ -207,7 +207,7 @@ runPipe Options{..} file = do
   when (verb == Loud) (traceM $ show filtRefacts)
   -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
-                   then runMaybeT (refactoringLoop as m filtRefacts) >>= return . fromMaybe (as, m)
+                   then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   let output = exactPrintWithAnns res ares
