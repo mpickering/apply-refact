@@ -75,7 +75,6 @@ data Options = Options
   , optionsRefactFile :: Maybe FilePath -- ^ The refactorings to process
   , optionsInplace  :: Bool
   , optionsOutput   :: Maybe FilePath -- ^ Whether to overwrite the file inplace
-  , optionsSuggestions :: Bool -- ^ Whether to perform suggestions
   , optionsVerbosity :: Verbosity
   , optionsStep :: Bool -- ^ Ask before applying each hint
   , optionsDebug :: Bool
@@ -104,9 +103,6 @@ options =
                         <> short 'o'
                         <> help "Name of the file to output to"
                         <> metavar "FILE"))
-    <*>
-    switch (long "replace-suggestions"
-           <> help "Whether to process suggestions as well as errors")
     <*>
     option (str >>= parseVerbosity)
            ( long "verbosity"
