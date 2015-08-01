@@ -246,6 +246,7 @@ data LoopOption = LoopOption
 refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
                 -> MaybeT IO (Anns, Module)
 refactoringLoop as m [] = return (as, m)
+refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
 refactoringLoop as m hints@((hintDesc, rs): rss) =
   do inp <- liftIO $ do
         putStrLn hintDesc
