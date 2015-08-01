@@ -228,7 +228,7 @@ removeOverlap verb ideas = map (second (filter (`notElem` bad))) ideas
     go [_] = []
     go (x:y:xs) =
       if pos x `check` pos y
-        then (if (verb > Silent)
+        then (if verb > Silent
               then trace ("Ignoring " ++ showGhc (pos y) ++ " because of overlap")
               else id)
              -- Discard y, keep x as it may also overlap with the next hint
@@ -240,7 +240,7 @@ removeOverlap verb ideas = map (second (filter (`notElem` bad))) ideas
 
 data LoopOption = LoopOption
                     { desc :: String
-                    , perform :: (MaybeT IO (Anns, Module)) }
+                    , perform :: MaybeT IO (Anns, Module) }
 
 refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
                 -> MaybeT IO (Anns, Module)
