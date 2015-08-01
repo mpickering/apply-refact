@@ -187,7 +187,7 @@ runPipe Options{..} file = do
   let verb = optionsVerbosity
   when (verb == Loud) (traceM "Parsing module")
   (as, m) <- either (error . show) (uncurry applyFixities) <$> parseModule file
-  when optionsDebug (putStrLn (showAnnData as 0 m) >> exitSuccess)
+  when optionsDebug (putStrLn (showAnnData as 0 m))
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
   let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
@@ -210,6 +210,7 @@ runPipe Options{..} file = do
                    then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
+  when (optionsDebug (putStrLn (showAnnData ares 0 res)))
   let output = exactPrintWithAnns res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
