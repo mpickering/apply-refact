@@ -38,7 +38,6 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsInplace       = False
                   , optionsOutput        = Just outfile
                   , optionsRefactFile    = Just rfile
-                  , optionsSuggestions   = False
                   , optionsVerbosity     = Silent
                   , optionsStep          = False
                   , optionsRoundtrip     = False
