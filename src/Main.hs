@@ -65,7 +65,7 @@ parsePos s =
     (line, ',':col) ->
       case (,) <$> readMaybe line <*> readMaybe col of
         Just l -> return l
-        Nothing -> fail "Invaid input"
+        Nothing -> fail "Invalid input"
     _ -> fail "Invalid input"
 
 data Target = StdIn | File FilePath
@@ -90,7 +90,6 @@ options =
     <*>
     option (Just <$> str)
       (long "refact-file"
-      <> short 'h'
       <> value Nothing
       <> help "A file which specifies which refactorings to perform")
 
@@ -108,11 +107,11 @@ options =
            ( long "verbosity"
            <> short 'v'
            <> value Normal
-           <> help "Enable verbose mode")
+           <> help "Specify verbosity, 0, 1 or 2. The default is 1 and 0 is silent.")
     <*>
     switch (short 's'
            <> long "step"
-           <> help "Ask before applying each hint")
+           <> help "Ask before applying each refactoring")
     <*>
     switch (long "debug"
            <> help "Output the GHC AST for debugging"
@@ -137,16 +136,16 @@ optionsWithHelp
   =
     info (helper <*> options)
           ( fullDesc
-          <> progDesc "Automatically perform refactorings on haskell source file"
+          <> progDesc "Automatically perform refactorings on haskell source files"
           <> header "refactor" )
-
-
 
 
 main :: IO ()
 main = do
   o@Options{..} <- execParser optionsWithHelp
   when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
+  unless (isJust optionsTarget || isJust optionsRefactFile)
+    (error "Must specify either the target file or the refact file")
   case optionsTarget of
     Nothing ->
       withSystemTempFile "stdin"  (\fp hin -> do
@@ -206,7 +205,7 @@ runPipe Options{..} file = do
 
   when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
   when (verb == Loud) (traceM $ show filtRefacts)
-      -- need a check here to avoid overlap
+  -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
                    then runMaybeT (refactoringLoop as m filtRefacts) >>= return . fromMaybe (as, m)
                    else return . flip evalState 0 $
