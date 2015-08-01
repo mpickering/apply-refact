@@ -56,6 +56,10 @@ reproduce it.
 2. The refact file
 3. The command used to invoke `refactor`
 
+There are some known problems with CPP processing. If your library contains CPP
+directives other than `#ifdef` it is quite likely that the result will be
+unexpected.
+
 # Debugging
 
 There are also two hidden flags which can be useful for debugging.
