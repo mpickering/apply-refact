@@ -1,1 +1,1 @@
-{-# ANN foo "HLint: ignore" #-} foo = map f (map g x)
+{-# ANN foo "HLint: ignore" #-};foo = map f (map g x)

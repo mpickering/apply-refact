@@ -1,1 +1,1 @@
-yes = do let; x = y foo x
+yes = do let x = y; foo x
