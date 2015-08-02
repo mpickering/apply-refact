@@ -4,6 +4,8 @@ integrated into `hlint` to enable the automatic application of suggestions.
 
 # Example Usage
 
+<img src="http://i.imgur.com/7YXoVft.gif">
+
 ```
 # test.hs
 
