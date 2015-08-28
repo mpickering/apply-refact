@@ -1,5 +1,14 @@
 flags: {}
 packages:
 - '.'
-extra-deps: []
+- location:
+    git: https://github.com/haskell-suite/haskell-src-exts
+    commit: 664023767a342f5afcbc85b60c3e2eee492f5cd1
+  # extra-dep: true
+- location:
+    git: https://github.com/mpickering/hlint
+    commit: a78f2d17d91aeda9cae3dbedb211444887ea80b9
+  # extra-dep: true
+extra-deps:
+- tasty-golden-2.2.2.4
 resolver: nightly-2015-08-27
