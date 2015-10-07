@@ -27,7 +27,7 @@ library
   GHC-Options: -Wall
   build-depends: base >=4.7 && <4.9
                , refact >= 0.2
-               , ghc-exactprint >= 0.3
+               , ghc-exactprint >= 0.4.1
                , ghc
                , containers
                , syb
@@ -44,7 +44,7 @@ executable refactor
   ghc-options: -Wall -fno-warn-unused-do-bind
   build-depends: base >= 4.7 && < 4.9
                , refact >= 0.2
-               , ghc-exactprint >= 0.3.1
+               , ghc-exactprint >= 0.4.1
                , ghc
                , containers
                , syb
@@ -70,7 +70,7 @@ Test-Suite test
                      , tasty-golden
                      , base < 5
                , refact >= 0.2
-               , ghc-exactprint >= 0.3
+               , ghc-exactprint >= 0.4.1
                , ghc
                , containers
                , syb
