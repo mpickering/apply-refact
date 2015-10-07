@@ -211,7 +211,7 @@ runPipe Options{..} file = do
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   when (optionsDebug) (putStrLn (showAnnData ares 0 res))
-  let output = exactPrintWithAnns res ares
+  let output = exactPrint res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
@@ -262,7 +262,7 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
       , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
       , ("q", LoopOption "Apply no further hints" (return (as, m)))
       , ("d", LoopOption "Discard previous changes" mzero )
-      , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrintWithAnns m as))
+      , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m as))
                                               >> refactoringLoop as m hints))
       , ("?", LoopOption "Show this help menu" loopHelp)]
     loopHelp = do
@@ -273,7 +273,7 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
     yAction =
       let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
         in do
-          exactPrintWithAnns r2 r1 `seq` return ()
+          exactPrint r2 r1 `seq` return ()
           refactoringLoop r1 r2 rss
 
 
