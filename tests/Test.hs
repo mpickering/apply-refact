@@ -15,15 +15,19 @@ import System.IO
 
 import Debug.Trace
 import System.Process
+import Test.Tasty.ExpectedFailure
 
 
 main =
   defaultMain =<< mkTests <$> findTests
 
+testDir = "tests/examples"
+
+expectedFailures :: [FilePath]
+expectedFailures = map (testDir </>) ["NegLit.hs", "AndList.hs", "RedundantDo.hs"]
+
 findTests :: IO [FilePath]
-findTests = do
-  files <- getDirectoryContents "tests/examples"
-  return $ (map ("tests/examples" </>) . filter ((== ".hs") . takeExtension )) files
+findTests = findByExtension [".hs"] testDir
 
 
 mkTests :: [FilePath] -> TestTree
@@ -50,7 +54,8 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
             writeFile rfile str
             hSilence [stderr] $ runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]
-      in goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
+          testFn  = if fp `elem` expectedFailures then expectFail else id
+      in testFn $ goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
 
 
 

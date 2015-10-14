@@ -68,6 +68,7 @@ Test-Suite test
       buildable: False
   Build-depends:       tasty
                      , tasty-golden
+                     , tasty-expected-failure
                      , base < 5
                , refact >= 0.2
                , ghc-exactprint >= 0.4.1
