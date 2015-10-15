@@ -24,7 +24,7 @@ main =
 testDir = "tests/examples"
 
 expectedFailures :: [FilePath]
-expectedFailures = map (testDir </>) ["NegLit.hs", "AndList.hs", "RedundantDo.hs"]
+expectedFailures = map (testDir </>) ["AndList.hs", "RedundantDo.hs"]
 
 findTests :: IO [FilePath]
 findTests = findByExtension [".hs"] testDir
