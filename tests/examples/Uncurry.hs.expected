@@ -1,0 +1,3 @@
+f p = uncurry func p
+
+f p =    uncurry (.=) p
