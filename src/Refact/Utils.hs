@@ -90,22 +90,22 @@ combine oldDelta oldann newann =
       , annCapturedSpan = annCapturedSpan newann}
   where
     -- Get rid of structural information when replacing, we assume that the
-    -- structural information is already there.
+    -- structural information is already there in the new expression.
     removeComma = filter (\(kw, dp) -> case kw of
                                          G GHC.AnnComma -> False
                                          AnnSemiSep -> False
                                          _ -> True)
 
-    -- Make sure not to get rid of structure information when replacing
+    -- Make sure to keep structural information when replacing.
     extraComma [] = []
     extraComma (last -> x) = case fst x of
                               G GHC.AnnComma -> [x]
                               AnnSemiSep -> [x]
                               G GHC.AnnSemi -> [x]
                               _ -> []
+
     newEntryDelta | deltaRow oldDelta > 0 = oldDelta
                   | otherwise = annEntryDelta oldann
---    captured = annCapturedSpan
 
 
 -- | A parent in this case is an element which has the same SrcSpan
