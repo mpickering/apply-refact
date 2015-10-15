@@ -85,10 +85,18 @@ combine oldDelta oldann newann =
   Ann { annEntryDelta = newEntryDelta
       , annPriorComments = annPriorComments oldann ++ annPriorComments newann
       , annFollowingComments = annFollowingComments oldann ++ annFollowingComments newann
-      , annsDP = annsDP newann ++ extraComma (annsDP oldann)
+      , annsDP = removeComma (annsDP newann) ++ extraComma (annsDP oldann)
       , annSortKey = annSortKey newann
       , annCapturedSpan = annCapturedSpan newann}
   where
+    -- Get rid of structural information when replacing, we assume that the
+    -- structural information is already there.
+    removeComma = filter (\(kw, dp) -> case kw of
+                                         G GHC.AnnComma -> False
+                                         AnnSemiSep -> False
+                                         _ -> True)
+
+    -- Make sure not to get rid of structure information when replacing
     extraComma [] = []
     extraComma (last -> x) = case fst x of
                               G GHC.AnnComma -> [x]
