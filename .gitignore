@@ -1,3 +1,4 @@
 tests/examples/*.out
 tests/examples/*.refact
 
+.stack-work
