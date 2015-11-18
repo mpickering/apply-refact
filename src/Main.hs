@@ -28,8 +28,6 @@ import Control.Monad.Trans.Maybe
 import Data.List hiding (find)
 import Data.Ord
 
-import System.Process
-import System.Directory
 import System.IO
 import System.IO.Temp
 import System.FilePath.Find
@@ -195,7 +193,7 @@ runPipe Options{..} file = do
   let noOverlapInp = removeOverlap verb inp
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
-      posFilter (s, rs) =
+      posFilter (_, rs) =
         case optionsPos of
           Nothing -> True
           Just p  -> any (flip spans p . pos) rs

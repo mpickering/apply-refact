@@ -14,7 +14,6 @@ import PlaceHolder
 import Data.Generics hiding (Fixity)
 import Data.Maybe
 import Language.Haskell.GHC.ExactPrint.Types
-import Language.Haskell.GHC.ExactPrint.Utils
 
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -27,7 +26,7 @@ applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m
                      in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
 
 expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
-expFix e@(L loc (OpApp l op _ r)) = do
+expFix (L loc (OpApp l op _ r)) = do
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
 expFix e = return e
@@ -55,7 +54,7 @@ mkOpAppRn ::
           -> M (LHsExpr RdrName)
 
 -- (e11 `op1` e12) `op2` e2
-mkOpAppRn fs loc e1@(L l (OpApp e11 op1 p e12)) op2 fix2 e2
+mkOpAppRn fs loc e1@(L _ (OpApp e11 op1 p e12)) op2 fix2 e2
   | nofix_error
   = return $ L loc (OpApp e1 op2 p e2)
 
@@ -70,7 +69,7 @@ mkOpAppRn fs loc e1@(L l (OpApp e11 op1 p e12)) op2 fix2 e2
 
 ---------------------------
 --      (- neg_arg) `op` e2
-mkOpAppRn fs loc e1@(L l (NegApp neg_arg neg_name)) op2 fix2 e2
+mkOpAppRn fs loc e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
   | nofix_error
   = return (L loc (OpApp e1 op2 PlaceHolder e2))
 

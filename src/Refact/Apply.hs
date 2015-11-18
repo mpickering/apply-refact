@@ -40,8 +40,6 @@ import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type
                     , modifyAnnKey, replaceAnnKey, Import)
 
-import Debug.Trace
-
 
 -- Perform the substitutions
 

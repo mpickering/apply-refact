@@ -91,7 +91,7 @@ combine oldDelta oldann newann =
   where
     -- Get rid of structural information when replacing, we assume that the
     -- structural information is already there in the new expression.
-    removeComma = filter (\(kw, dp) -> case kw of
+    removeComma = filter (\(kw, _) -> case kw of
                                          G GHC.AnnComma -> False
                                          AnnSemiSep -> False
                                          _ -> True)
