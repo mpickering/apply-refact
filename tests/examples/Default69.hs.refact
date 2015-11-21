@@ -1,0 +1,1 @@
+[("tests/examples/Default69.hs:1:7: Error: Redundant evaluate\nFound:\n  evaluate [12]\nWhy not:\n  return [12]\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 20}, subts = [("x",SrcSpan {startLine = 1, startCol = 16, endLine = 1, endCol = 20})], orig = "return x"}])]

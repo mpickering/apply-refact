@@ -1,0 +1,1 @@
+[("tests/examples/Default75.hs:1:15: Error: Drop on a non-positive\nFound:\n  drop (-3) x\nWhy not:\n  x\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 26}, subts = [("i",SrcSpan {startLine = 1, startCol = 20, endLine = 1, endCol = 24}),("x",SrcSpan {startLine = 1, startCol = 25, endLine = 1, endCol = 26})], orig = "x"}])]

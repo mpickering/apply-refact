@@ -1,0 +1,1 @@
+[("tests/examples/Default44.hs:1:15: Warning: Use const\nFound:\n  \\ x -> True\nWhy not:\n  const True\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 25}, subts = [("y",SrcSpan {startLine = 1, startCol = 21, endLine = 1, endCol = 25})], orig = "const y"}])]

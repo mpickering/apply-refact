@@ -1,0 +1,1 @@
+[("tests/examples/List4.hs:1:7: Warning: Use :\nFound:\n  [x] ++ xs\nWhy not:\n  x : xs\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 16}, subts = [("x",SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 9}),("xs",SrcSpan {startLine = 1, startCol = 14, endLine = 1, endCol = 16})], orig = "x : xs"}])]

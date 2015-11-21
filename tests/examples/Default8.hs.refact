@@ -1,0 +1,1 @@
+[("tests/examples/Default8.hs:1:7: Error: Redundant if\nFound:\n  if f a then True else b\nWhy not:\n  f a || b\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 30}, subts = [("x",SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 13}),("y",SrcSpan {startLine = 1, startCol = 29, endLine = 1, endCol = 30})], orig = "x || y"}])]

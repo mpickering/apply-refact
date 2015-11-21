@@ -1,0 +1,1 @@
+[("tests/examples/Bracket7.hs:1:7: Warning: Redundant bracket\nFound:\n  if (f x) then y else z\nWhy not:\n  if f x then y else z\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 15}, subts = [("x",SrcSpan {startLine = 1, startCol = 11, endLine = 1, endCol = 14})], orig = "x"}])]

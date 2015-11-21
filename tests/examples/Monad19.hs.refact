@@ -1,0 +1,1 @@
+[("tests/examples/Monad19.hs:1:7: Error: Use mapM_\nFound:\n  mapM async ds >>= mapM wait\nWhy not:\n  mapM async ds >>= mapM_ wait\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 25, endLine = 1, endCol = 29}, subts = [], orig = "mapM_"}])]

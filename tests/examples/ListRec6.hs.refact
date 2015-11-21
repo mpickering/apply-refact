@@ -1,0 +1,1 @@
+[("tests/examples/ListRec6.hs:1:1: Warning: Use foldl\nFound:\n  f [] y = y\n  f (x : xs) y = f xs $ g x y\nWhy not:\n  f xs y = foldl (flip g) y xs\n",[Replace {rtype = Decl, pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 38}, subts = [], orig = "f xs y = foldl (flip g) y xs"}])]

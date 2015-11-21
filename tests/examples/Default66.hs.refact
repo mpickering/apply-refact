@@ -1,0 +1,1 @@
+[("tests/examples/Default66.hs:1:9: Error: Redundant $!\nFound:\n  return $! (x, y)\nWhy not:\n  return (x, y)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 25}, subts = [("f",SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 15}),("x",SrcSpan {startLine = 1, startCol = 19, endLine = 1, endCol = 25})], orig = "f x"}])]

@@ -1,0 +1,1 @@
+[("tests/examples/Comment2.hs:1:1: Warning: Use pragma syntax\nFound:\n  {- INLINE Y -}\nWhy not:\n  {-# INLINE Y #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 15}, newComment = "{-# INLINE Y #-}"}])]

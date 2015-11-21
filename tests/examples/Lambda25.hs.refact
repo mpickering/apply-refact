@@ -1,0 +1,1 @@
+[("tests/examples/Lambda25.hs:1:10: Warning: Avoid lambda\nFound:\n  \\ x -> c x d\nWhy not:\n  (`c` d)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 21}, subts = [], orig = "(`c` d)"}])]

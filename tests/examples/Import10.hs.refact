@@ -1,0 +1,1 @@
+[("tests/examples/Import10.hs:1:1: Warning: Redundant as\nFound:\n  import A as A\nWhy not:\n  import A\n",[RemoveAsKeyword {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 14}}])]

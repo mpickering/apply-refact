@@ -1,0 +1,1 @@
+[("tests/examples/Pragma8.hs:1:1: Error: Use better pragmas\nFound:\n  {-# OPTIONS_GHC -XGADTs  #-}\nWhy not remove it.\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 28}, newComment = ""}])]

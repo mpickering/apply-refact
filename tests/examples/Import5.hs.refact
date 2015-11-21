@@ -1,0 +1,1 @@
+[("tests/examples/Import5.hs:1:1: Error: Use fewer imports\nFound:\n  import A (B)\n  import A (C)\nWhy not:\n  import A (B, C)\n",[Replace {rtype = Import, pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 12}, subts = [], orig = "import A (B, C)"},Delete {rtype = Import, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 26}}])]

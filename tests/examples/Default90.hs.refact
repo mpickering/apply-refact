@@ -1,0 +1,1 @@
+[("tests/examples/Default90.hs:1:8: Error: Redundant not\nFound:\n  not . not . any (`notElem` special) . fst . derives\nWhy not:\n  any (`notElem` special) . fst . derives\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 59}, subts = [("x",SrcSpan {startLine = 1, startCol = 20, endLine = 1, endCol = 59})], orig = "x"}])]

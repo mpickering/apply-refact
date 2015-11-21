@@ -1,0 +1,1 @@
+[("tests/examples/List0.hs:1:7: Warning: Use list literal\nFound:\n  1 : 2 : []\nWhy not:\n  [1, 2]\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 13}, subts = [("a",SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 8}),("b",SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 10})], orig = "[a, b]"}])]

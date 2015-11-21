@@ -1,0 +1,1 @@
+[("tests/examples/Import21.hs:1:1: Warning: Use import/export shortcut\nFound:\n  module Foo (module A, baz, module B, module C) where\n  import A\n  import B (map, filter)\n  import C\nWhy not:\n  module Foo (baz, module X) where\n  import A as X\n  import B as X (map, filter)\n  import C as X\n",[])]

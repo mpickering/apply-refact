@@ -1,0 +1,1 @@
+[("tests/examples/Default118.hs:2:7: Warning: Use forM\nFound:\n  flip mapM\nWhy not:\n  forM\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 2, startCol = 7, endLine = 2, endCol = 16}, subts = [], orig = "Control.Monad.forM"}])]

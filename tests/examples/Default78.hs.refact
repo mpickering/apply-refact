@@ -1,0 +1,1 @@
+[("tests/examples/Default78.hs:1:8: Error: Take on a non-positive\nFound:\n  take 0 x\nWhy not:\n  []\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 16}, subts = [("i",SrcSpan {startLine = 1, startCol = 13, endLine = 1, endCol = 14}),("x",SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 16})], orig = "[]"}])]

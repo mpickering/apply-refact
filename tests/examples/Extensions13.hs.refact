@@ -1,0 +1,1 @@
+[("tests/examples/Extensions13.hs:1:1: Error: Unused LANGUAGE pragma\nFound:\n  {-# LANGUAGE RecordWildCards #-}\nWhy not remove it.\nNote: you may need to add DisambiguateRecordFields\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 33}, newComment = ""}])]

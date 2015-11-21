@@ -1,0 +1,1 @@
+[("tests/examples/Default93.hs:1:7: Warning: Use void\nFound:\n  baz baz >> return ()\nWhy not:\n  Control.Monad.void (baz baz)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 27}, subts = [("a",SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 14})], orig = "Control.Monad.void (a)"}])]

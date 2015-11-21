@@ -1,0 +1,1 @@
+[("tests/examples/Default71.hs:1:15: Error: Use mapMaybe\nFound:\n  catMaybes . map Just\nWhy not:\n  mapMaybe Just\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 35}, subts = [("f",SrcSpan {startLine = 1, startCol = 31, endLine = 1, endCol = 35})], orig = "mapMaybe f"}])]

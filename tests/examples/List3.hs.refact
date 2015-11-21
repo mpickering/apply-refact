@@ -1,0 +1,1 @@
+[("tests/examples/List3.hs:1:5: Warning: Use string literal pattern\nFound:\n  ['h', 'e']\nWhy not:\n  \"he\"\n",[Replace {rtype = Pattern, pos = SrcSpan {startLine = 1, startCol = 5, endLine = 1, endCol = 14}, subts = [], orig = "\"he\""}])]

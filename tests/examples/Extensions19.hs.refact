@@ -1,0 +1,1 @@
+[("tests/examples/Extensions19.hs:1:1: Error: Unused LANGUAGE pragma\nFound:\n  {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}\nWhy not:\n  {-# LANGUAGE GeneralizedNewtypeDeriving #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 64}, newComment = "{-# LANGUAGE GeneralizedNewtypeDeriving #-}"}])]

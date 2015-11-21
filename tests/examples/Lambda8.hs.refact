@@ -1,0 +1,1 @@
+[("tests/examples/Lambda8.hs:1:9: Warning: Use section\nFound:\n  ((*) x)\nWhy not:\n  (x *)\n",[])]

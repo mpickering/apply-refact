@@ -1,0 +1,1 @@
+[("tests/examples/Duplicate6.hs:1:16: Warning: Reduce duplication\nFound:\n  a = 1\n  b = 2\n  c = 3\nWhy not:\n  Combine with tests/examples/Duplicate6.hs:1:53\n",[])]

@@ -1,0 +1,1 @@
+[("tests/examples/Naming0.hs:1:1: Warning: Use camelCase\nFound:\n  data Yes = Foo\n           | Bar'Test\nWhy not:\n  data Yes = Foo\n           | BarTest\n",[])]

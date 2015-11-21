@@ -1,0 +1,1 @@
+[("tests/examples/Structure20.hs:2:17: Error: Redundant bang pattern\nFound:\n  !1\nWhy not:\n  1\n",[Replace {rtype = Pattern, pos = SrcSpan {startLine = 2, startCol = 17, endLine = 2, endCol = 19}, subts = [("x",SrcSpan {startLine = 2, startCol = 18, endLine = 2, endCol = 19})], orig = "x"}])]

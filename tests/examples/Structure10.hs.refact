@@ -1,0 +1,1 @@
+[("tests/examples/Structure10.hs:1:6: Warning: Use record patterns\nFound:\n  Bar _ _ _ _\nWhy not:\n  Bar{}\n",[Replace {rtype = Pattern, pos = SrcSpan {startLine = 1, startCol = 6, endLine = 1, endCol = 17}, subts = [], orig = "Bar{}"}])]

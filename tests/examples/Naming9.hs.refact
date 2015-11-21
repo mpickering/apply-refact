@@ -1,0 +1,1 @@
+[("tests/examples/Naming9.hs:1:1: Warning: Use camelCase\nFound:\n  semiring'laws = ...\nWhy not:\n  semiringLaws = ...\n",[])]

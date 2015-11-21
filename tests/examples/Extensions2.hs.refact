@@ -1,0 +1,1 @@
+[("tests/examples/Extensions2.hs:1:1: Error: Unused LANGUAGE pragma\nFound:\n  {-# LANGUAGE GADTs, ParallelListComp, ImplicitParams #-}\nWhy not:\n  {-# LANGUAGE GADTs, ParallelListComp #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 57}, newComment = "{-# LANGUAGE GADTs, ParallelListComp #-}"}])]

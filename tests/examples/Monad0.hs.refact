@@ -1,0 +1,1 @@
+[("tests/examples/Monad0.hs:1:10: Error: Use mapM_\nFound:\n  mapM print a\nWhy not:\n  mapM_ print a\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 14}, subts = [], orig = "mapM_"}])]

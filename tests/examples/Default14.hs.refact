@@ -1,0 +1,1 @@
+[("tests/examples/Default14.hs:1:8: Warning: Use head\nFound:\n  x !! 0\nWhy not:\n  head x\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 14}, subts = [("x",SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 9})], orig = "head x"}])]

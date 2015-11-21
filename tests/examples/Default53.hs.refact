@@ -1,0 +1,1 @@
+[("tests/examples/Default53.hs:1:7: Error: Use unless\nFound:\n  when (not . null $ asdf)\nWhy not:\n  unless (null asdf)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 31}, subts = [], orig = "unless (null asdf)"}])]

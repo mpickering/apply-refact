@@ -1,0 +1,1 @@
+[("tests/examples/Import20.hs:1:1: Warning: Use hierarchical imports\nFound:\n  import IO as X\nWhy not:\n  import System.IO as X\n  import System.IO.Error as X\n  import Control.Exception as X (bracket, bracket_)\n",[])]

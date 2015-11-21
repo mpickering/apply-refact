@@ -1,0 +1,1 @@
+[("tests/examples/Lambda24.hs:1:9: Warning: Use section\nFound:\n  (flip Foo.bar x)\nWhy not:\n  (`Foo.bar` x)\n",[])]

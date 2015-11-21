@@ -1,0 +1,1 @@
+[("tests/examples/Bracket23.hs:1:6: Error: Redundant bracket\nFound:\n  (True)\nWhy not:\n  True\n",[Replace {rtype = Pattern, pos = SrcSpan {startLine = 1, startCol = 6, endLine = 1, endCol = 12}, subts = [("x",SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 11})], orig = "x"}])]

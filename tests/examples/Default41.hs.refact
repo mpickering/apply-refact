@@ -1,0 +1,1 @@
+[("tests/examples/Default41.hs:1:12: Warning: Use infix\nFound:\n  elem x y\nWhy not:\n  x `elem` y\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 20}, subts = [("x",SrcSpan {startLine = 1, startCol = 17, endLine = 1, endCol = 18}),("y",SrcSpan {startLine = 1, startCol = 19, endLine = 1, endCol = 20})], orig = "x `elem` y"}])]

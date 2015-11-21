@@ -1,4 +1,3 @@
-{-# LANGUAGE RecordWildCards #-}
 module Test where
 
 import Test.Tasty
@@ -49,9 +48,7 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsVersion       = False
                   , optionsPos           = Nothing
                   }
-          action = do
-            (_, str, _) <- readCreateProcessWithExitCode (shell $ "hlint --serialise " ++ fp) ""
-            writeFile rfile str
+          action =
             hSilence [stderr] $ runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]
           testFn  = if fp `elem` expectedFailures then expectFail else id

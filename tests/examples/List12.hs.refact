@@ -1,0 +1,1 @@
+[("tests/examples/List12.hs:1:12: Warning: Use String\nFound:\n  [Char] -> a\nWhy not:\n  String -> a\n",[Replace {rtype = Type, pos = SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 18}, subts = [], orig = "String"}])]

@@ -1,0 +1,1 @@
+[("tests/examples/Structure9.hs:1:1: Warning: Use otherwise\nFound:\n  foo x\n    | a = b\n    | True = d\nWhy not:\n  foo x\n    | a = b\n    | otherwise = d\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 17, endLine = 1, endCol = 21}, subts = [], orig = "otherwise"}])]
