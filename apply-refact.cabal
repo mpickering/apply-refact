@@ -14,6 +14,7 @@ category:            Development
 build-type:          Simple
 -- extra-source-files:
 cabal-version:       >=1.10
+tested-with:        GHC == 7.10.2
 
 
 source-repository head
