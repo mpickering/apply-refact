@@ -28,7 +28,7 @@ library
   GHC-Options: -Wall
   build-depends: base >=4.7 && <4.9
                , refact >= 0.2
-               , ghc-exactprint >= 0.4.1
+               , ghc-exactprint >= 0.5
                , ghc
                , containers
                , syb

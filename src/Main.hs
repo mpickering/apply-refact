@@ -12,6 +12,10 @@
 module Main where
 
 import Language.Haskell.GHC.ExactPrint
+import Language.Haskell.GHC.ExactPrint.Print
+import Language.Haskell.GHC.ExactPrint.Delta
+import Language.Haskell.GHC.ExactPrint.Parsers (parseModuleWithOptions)
+import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils
 
 
@@ -36,6 +40,7 @@ import qualified System.PosixCompat.Files as F
 
 import Control.Monad
 import Control.Monad.State
+import Control.Monad.Identity
 
 import Paths_apply_refact
 import Data.Version
@@ -179,11 +184,18 @@ filterFilename = do
 
 -- Pipe
 
+refactOptions :: PrintOptions Identity String
+refactOptions = stringOptions { epRigidity = RigidLayout }
+
+rigidLayout :: DeltaOptions
+rigidLayout = deltaOptions RigidLayout
+
 runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
   when (verb == Loud) (traceM "Parsing module")
-  (as, m) <- either (error . show) (uncurry applyFixities) <$> parseModule file
+  (as, m) <- either (error . show) (uncurry applyFixities)
+              <$> parseModuleWithOptions rigidLayout file
   when optionsDebug (putStrLn (showAnnData as 0 m))
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
@@ -208,7 +220,7 @@ runPipe Options{..} file = do
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
   when (optionsDebug) (putStrLn (showAnnData ares 0 res))
-  let output = exactPrint res ares
+  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
