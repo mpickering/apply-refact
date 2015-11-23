@@ -2,6 +2,20 @@
 [`refact`](https://hackage.haskell.org/package/refact) package. It is currently
 integrated into `hlint` to enable the automatic application of suggestions.
 
+# install
+
+```shell
+stack --resolver=nightly install apply-refact
+```
+
+executable name is `refactor`
+
+#### Hlint Integration example
+
+```shell
+hlint src/Main.hs --refactor --refactor-options="--inplace"
+```
+
 # Example Usage
 
 <img src="http://i.imgur.com/7YXoVft.gif">
@@ -11,7 +25,7 @@ integrated into `hlint` to enable the automatic application of suggestions.
 
 foo = (x)
 
-# hlint.refact -- produced by hlint
+# hlint.refact -- produced by hlint --serialise
 [("test.hs:1:7: Warning: Redundant bracket\nFound:\n  (x)\nWhy not:\n
 x\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine
 = 1, endCol = 10}, subts = [("x",SrcSpan {startLine = 1, startCol = 8, endLine =
