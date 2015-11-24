@@ -15,8 +15,8 @@ build-type:          Simple
 extra-source-files: CHANGELOG
                    , README.md
                    , tests/examples/*.hs
-                   , tests/examples/*.refact
-                   , tests/examples/*.expected
+                   , tests/examples/*.hs.refact
+                   , tests/examples/*.hs.expected
 cabal-version:       >=1.10
 tested-with:        GHC == 7.10.2
 
