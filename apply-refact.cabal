@@ -60,7 +60,7 @@ executable refactor
                , filemanip
                , unix-compat
                , filepath
-               , temporary-rc
+               , temporary
                , transformers
 
 Test-Suite test
@@ -88,5 +88,5 @@ Test-Suite test
                , unix-compat
                , filepath
                , silently
-               , temporary-rc
+               , temporary
                , transformers
