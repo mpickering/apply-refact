@@ -145,6 +145,7 @@ replaceAnnKey ::
 replaceAnnKey a old new inp deltainfo =
   fromMaybe a (replace old new inp deltainfo a)
 
+
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
 toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)

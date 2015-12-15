@@ -8,6 +8,7 @@ import System.FilePath
 import Options.Applicative
 
 import Main hiding (main)
+import Refact.Apply
 
 import System.IO.Silently
 import System.IO
