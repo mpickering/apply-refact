@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                apply-refact
-version:             0.1.0.0
+version:             0.2.0.0
 synopsis:            Perform refactorings specified by the refact library.
 description:         Perform refactorings specified by the refact library.
 license:             BSD3

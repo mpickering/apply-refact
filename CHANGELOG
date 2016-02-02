@@ -1,3 +1,7 @@
+v0.2
+
+  * API refactoring to make the tool usable as a library.
+
 v0.1
 
   * Initial Release
