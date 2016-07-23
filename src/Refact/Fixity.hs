@@ -26,7 +26,7 @@ applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m
                      in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
 
 expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
-expFix (L loc (OpApp l op _ r)) = do
+expFix (L loc (OpApp l op _ r)) =
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
 expFix e = return e

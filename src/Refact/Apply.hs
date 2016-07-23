@@ -217,7 +217,7 @@ substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     `extM` identSub m ss
                                     `extM` patSub m ss
                                     `extM` stmtSub m ss
-                                    `extM` (exprSub m ss)
+                                    `extM` exprSub m ss
                                     )
 
 stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
@@ -250,7 +250,7 @@ identSub m subs old@(GHC.FunBindMatch (GHC.L _ name) _) =
   where
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunBindMatch n b) new = do
-      let fakeExpr = (GHC.L (getLoc new) (GHC.VarPat new))
+      let fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
       return $ GHC.FunBindMatch new b
     subst o _ = return o

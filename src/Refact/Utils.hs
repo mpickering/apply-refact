@@ -152,4 +152,4 @@ replaceAnnKey a old new inp deltainfo =
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
 toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
   where
-    f x y = mkSrcLoc (GHC.mkFastString file) x y
+    f = mkSrcLoc (GHC.mkFastString file)
