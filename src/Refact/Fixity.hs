@@ -32,7 +32,7 @@ expFix (L loc (OpApp l op _ r)) = do
 expFix e = return e
 
 getIdent :: Expr -> String
-getIdent (unLoc -> HsVar n) = occNameString . rdrNameOcc $ n
+getIdent (unLoc -> HsVar (L _ n)) = occNameString . rdrNameOcc $ n
 getIdent _ = error "Must be HsVar"
 
 
@@ -161,5 +161,5 @@ infix_  = fixity InfixN
 
 -- Internal: help function for the above definitions.
 fixity :: FixityDirection -> Int -> [String] -> [(String, Fixity)]
-fixity a p = map (,Fixity p a)
+fixity a p = map (,Fixity "" p a)
 

@@ -30,7 +30,7 @@ library
                    , Refact.Apply
                    , Refact.Fixity
   GHC-Options: -Wall
-  build-depends: base >=4.7 && <4.9
+  build-depends: base >=4.8 && <4.10
                , refact >= 0.2
                , ghc-exactprint >= 0.5
                , ghc
@@ -51,7 +51,7 @@ executable refactor
   hs-source-dirs:      src
   default-language: Haskell2010
   ghc-options: -Wall -fno-warn-unused-do-bind
-  build-depends: base >= 4.7 && < 4.9
+  build-depends: base >= 4.8 && < 4.10
                , refact >= 0.2
                , ghc-exactprint >= 0.4.1
                , ghc

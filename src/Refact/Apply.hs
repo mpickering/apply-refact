@@ -53,7 +53,7 @@ import Data.Monoid
 import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type
+import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
 
 -- library access to perform the substitutions
@@ -203,50 +203,63 @@ parseMatch :: Parser (GHC.LMatch GHC.RdrName (GHC.LHsExpr GHC.RdrName))
 parseMatch dyn fname s =
   case parseBind dyn fname s of
     Right (as, GHC.L l GHC.FunBind{fun_matches}) ->
-      case GHC.mg_alts fun_matches of
+      case unLoc (GHC.mg_alts fun_matches) of
            [x] -> Right (as, x)
            _   -> Left (l, "Not a single match")
     Right (_, GHC.L l _) -> Left (l, "Not a funbind")
     Left e -> Left e
 
 -- Substitute variables into templates
+-- Finds places in the templates where we need to insert variables.
 
 substTransform :: (Data a, Data b) => b -> [(String, GHC.SrcSpan)] -> a -> M a
-substTransform m ss = everywhereM (mkM (exprSub m ss)
-                                    `extM` typeSub m ss
+substTransform m ss = everywhereM (mkM (typeSub m ss)
+                                    `extM` identSub m ss
                                     `extM` patSub m ss
                                     `extM` stmtSub m ss
-                                    `extM` identSub m ss
+                                    `extM` (exprSub m ss)
                                     )
 
 stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
-stmtSub m subs old@(GHC.L _ (BodyStmt (GHC.L _ (HsVar name)) _ _ _) ) =
+stmtSub m subs old@(GHC.L _ (BodyStmt (GHC.L _ (HsVar (L _ name))) _ _ _) ) =
   resolveRdrName m (findStmt m) old subs name
 stmtSub _ _ e = return e
 
 patSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
-patSub m subs old@(GHC.L _ (VarPat name)) =
+patSub m subs old@(GHC.L _ (VarPat (L _ name))) =
   resolveRdrName m (findPat m) old subs name
 patSub _ _ e = return e
 
 typeSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Type -> M Type
-typeSub m subs old@(GHC.L _ (HsTyVar name)) =
+typeSub m subs old@(GHC.L _ (HsTyVar (L _ name))) =
   resolveRdrName m (findType m) old subs name
 typeSub _ _ e = return e
 
 exprSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
-exprSub m subs old@(GHC.L _ (HsVar name)) =
+exprSub m subs old@(GHC.L _ (HsVar (L _ name))) =
   resolveRdrName m (findExpr m) old subs name
 exprSub _ _ e = return e
 
-identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Name -> M Name
-identSub m subs old@(GHC.L _ name) =
+
+-- Used for Monad10, Monad11 tests.
+-- The issue being that in one case the information is attached to a VarPat
+-- but we need to move the annotations onto the actual name
+identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
+identSub m subs old@(GHC.FunBindMatch (GHC.L _ name) _) =
   resolveRdrName' subst (findName m) old subs name
   where
-    subst :: Name -> (Name, Pat) -> M Name
-    subst (mkAnnKey -> oldkey) (n, p)
-      = n <$ modify (\r -> replaceAnnKey r oldkey (mkAnnKey p) (mkAnnKey n) (mkAnnKey p))
+    subst :: FunBind -> Name -> M FunBind
+    subst (GHC.FunBindMatch n b) new = do
+      let fakeExpr = (GHC.L (getLoc new) (GHC.VarPat new))
+      modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
+      return $ GHC.FunBindMatch new b
+    subst o _ = return o
+identSub _ _ e = return e
 
+
+
+-- g is usually modifyAnnKey
+-- f is usually a function which checks the locations are equal
 resolveRdrName' ::
                   (a -> b -> M a)  -> (SrcSpan -> b) -> a
                -> [(String, GHC.SrcSpan)] -> GHC.RdrName -> M a
@@ -334,14 +347,11 @@ findDecl = findGen "decl"
 findStmt :: Data a => a -> SrcSpan -> Stmt
 findStmt = findGen "stmt"
 
-findName :: Data a => a -> SrcSpan -> (Name, Pat)
-findName m ss =
-  case findPat m ss of
-       p@(GHC.L l (VarPat n)) -> (GHC.L l n, p)
-       GHC.L l _ -> error $ "Not var pat: " ++ showGhc l
+findName :: Data a => a -> SrcSpan -> Name
+findName = findGen "name"
 
-
-findLargestExpression :: SrcSpan -> GHC.Located ast -> Maybe (GHC.Located ast)
+findLargestExpression :: SrcSpan -> GHC.Located ast
+                      -> Maybe (GHC.Located ast)
 findLargestExpression ss e@(GHC.L l _) =
   if l == ss
     then Just e

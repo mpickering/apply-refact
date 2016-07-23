@@ -14,6 +14,7 @@ module Refact.Utils ( -- * Synonyms
                     , Pat
                     , Type
                     , Import
+                    , FunBind
                     -- * Monad
                     , M
                     -- * Utility
@@ -45,7 +46,6 @@ import Data.Maybe
 
 
 import qualified Refact.Types as R
-import Refact.Types hiding (SrcSpan)
 
 import Data.Generics.Schemes
 import Unsafe.Coerce
@@ -71,6 +71,7 @@ type Stmt = ExprLStmt GHC.RdrName
 
 type Import = LImportDecl GHC.RdrName
 
+type FunBind = MatchFixity GHC.RdrName
 
 -- | Replaces an old expression with a new expression
 replace :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
@@ -109,15 +110,15 @@ combine oldDelta oldann newann =
 
 
 -- | A parent in this case is an element which has the same SrcSpan
-findParent :: Data a => GHC.SrcSpan -> a -> Maybe AnnKey
-findParent ss = something (findParentWorker ss)
+findParent :: Data a => GHC.SrcSpan -> Anns -> a -> Maybe AnnKey
+findParent ss as = something (findParentWorker ss as)
 
 
-findParentWorker :: forall a . (Typeable a, Data a)
-           => GHC.SrcSpan -> a -> Maybe AnnKey
-findParentWorker oldSS a
+findParentWorker :: forall a . (Data a)
+           => GHC.SrcSpan -> Anns -> a -> Maybe AnnKey
+findParentWorker oldSS as a
   | con == typeRepTyCon (typeRep (Proxy :: Proxy (GHC.Located GHC.RdrName))) && x == typeRep (Proxy :: Proxy GHC.SrcSpan)
-      = if ss == oldSS
+      = if ss == oldSS && isJust (Map.lookup (AnnKey ss cn) as)
           then Just $ AnnKey ss cn
           else Nothing
   | otherwise = Nothing
@@ -134,9 +135,10 @@ findParentWorker oldSS a
 -- For example, this function will ensure the correct relative position and
 -- make sure that any trailing semi colons or commas are transferred.
 modifyAnnKey :: (Data old, Data new, Data mod) => mod -> Located old -> Located new -> M (Located new)
-modifyAnnKey m e1 e2 = e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
-  where
-    parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) m)
+modifyAnnKey m e1 e2 = do
+    as <- get
+    let parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) as m)
+    e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
 
 
 -- | Lower level version of @modifyAnnKey@
