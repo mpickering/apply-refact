@@ -74,7 +74,14 @@ type Import = LImportDecl GHC.RdrName
 type FunBind = MatchFixity GHC.RdrName
 
 -- | Replaces an old expression with a new expression
-replace :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Maybe Anns
+--
+-- Note that usually, new, inp and parent are all the same.
+replace :: AnnKey  -- The thing we are replacing
+        -> AnnKey  -- The thing which has the annotations we need for the new thing
+        -> AnnKey  -- The thing which is going to be inserted
+        -> AnnKey  -- The "parent", the largest thing which has he same SrcSpan
+                   -- Usually the same as inp and new
+        -> Anns -> Maybe Anns
 replace old new inp parent anns = do
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
@@ -97,7 +104,7 @@ combine oldDelta oldann newann =
                                          AnnSemiSep -> False
                                          _ -> True)
 
-    -- Make sure to keep structural information when replacing.
+    -- Make sure to keep structural information in the template.
     extraComma [] = []
     extraComma (last -> x) = case fst x of
                               G GHC.AnnComma -> [x]
@@ -105,6 +112,7 @@ combine oldDelta oldann newann =
                               G GHC.AnnSemi -> [x]
                               _ -> []
 
+    -- Keep the same delta if moving onto a new row
     newEntryDelta | deltaRow oldDelta > 0 = oldDelta
                   | otherwise = annEntryDelta oldann
 
@@ -113,12 +121,13 @@ combine oldDelta oldann newann =
 findParent :: Data a => GHC.SrcSpan -> Anns -> a -> Maybe AnnKey
 findParent ss as = something (findParentWorker ss as)
 
-
+-- Note that a parent must also have an annotation.
 findParentWorker :: forall a . (Data a)
            => GHC.SrcSpan -> Anns -> a -> Maybe AnnKey
 findParentWorker oldSS as a
   | con == typeRepTyCon (typeRep (Proxy :: Proxy (GHC.Located GHC.RdrName))) && x == typeRep (Proxy :: Proxy GHC.SrcSpan)
-      = if ss == oldSS && isJust (Map.lookup (AnnKey ss cn) as)
+      = if ss == oldSS
+            && isJust (Map.lookup (AnnKey ss cn) as)
           then Just $ AnnKey ss cn
           else Nothing
   | otherwise = Nothing

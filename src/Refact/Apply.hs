@@ -185,6 +185,7 @@ runRefactoring as m RemoveAsKeyword{..} =
     go imp@(GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
                     | otherwise =  imp
 
+-- Specialised parsers
 
 
 parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
@@ -244,6 +245,10 @@ exprSub _ _ e = return e
 -- Used for Monad10, Monad11 tests.
 -- The issue being that in one case the information is attached to a VarPat
 -- but we need to move the annotations onto the actual name
+--
+-- This looks convoluted but we can't match directly on a located name as
+-- it is not specific enough. Instead we match on some bigger context which
+-- is contains the located name we want to replace.
 identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
 identSub m subs old@(GHC.FunBindMatch (GHC.L _ name) _) =
   resolveRdrName' subst (findName m) old subs name
@@ -251,6 +256,8 @@ identSub m subs old@(GHC.FunBindMatch (GHC.L _ name) _) =
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunBindMatch n b) new = do
       let fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
+      -- Low level version as we need to combine the annotation information
+      -- from the template RdrName and the original VarPat.
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
       return $ GHC.FunBindMatch new b
     subst o _ = return o
@@ -260,9 +267,13 @@ identSub _ _ e = return e
 
 -- g is usually modifyAnnKey
 -- f is usually a function which checks the locations are equal
-resolveRdrName' ::
-                  (a -> b -> M a)  -> (SrcSpan -> b) -> a
-               -> [(String, GHC.SrcSpan)] -> GHC.RdrName -> M a
+resolveRdrName' :: (a -> b -> M a)  -- How to combine the value to insert and the replaced value
+               -> (SrcSpan -> b)    -- How to find the new value, when given the location it is in
+               -> a                 -- The old thing which we are going to possibly replace
+               -> [(String, GHC.SrcSpan)] -- Substs
+               -> GHC.RdrName       -- The name of the position in the template
+                                    --we are replacing into
+               -> M a
 resolveRdrName' g f old subs name =
   case name of
     -- Todo: this should replace anns as well?
@@ -290,6 +301,7 @@ insertComment k s as =
                           , annEntryDelta = DP (1,0) }) k as
 
 
+-- Substitute the template into the original AST.
 doGenReplacement :: (Data ast, Data a)
               => a
               -> (GHC.Located ast -> Bool)
