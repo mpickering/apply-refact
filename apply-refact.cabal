@@ -60,7 +60,7 @@ executable refactor
                , mtl
                , process
                , directory
-               , optparse-applicative < 0.13
+               , optparse-applicative >= 0.13
                , filemanip
                , unix-compat
                , filepath

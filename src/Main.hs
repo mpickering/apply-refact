@@ -26,6 +26,7 @@ import qualified SrcLoc as GHC
 
 import Options.Applicative
 import Data.Maybe
+import Data.Monoid ( (<>) )
 import Control.Monad.Trans.Maybe
 import Data.List hiding (find)
 
