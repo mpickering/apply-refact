@@ -1,3 +1,11 @@
+v0.3.0.1
+
+	* Version bound tweaking to build with optparse-applicative 0.13
+
+v0.3
+
+	* GHC 8.0 compatability
+
 v0.2
 
   * API refactoring to make the tool usable as a library.
