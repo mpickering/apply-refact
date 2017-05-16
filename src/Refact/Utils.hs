@@ -71,7 +71,7 @@ type Stmt = ExprLStmt GHC.RdrName
 
 type Import = LImportDecl GHC.RdrName
 
-type FunBind = MatchFixity GHC.RdrName
+type FunBind = HsMatchContext GHC.RdrName
 
 -- | Replaces an old expression with a new expression
 --

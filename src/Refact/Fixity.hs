@@ -161,5 +161,5 @@ infix_  = fixity InfixN
 
 -- Internal: help function for the above definitions.
 fixity :: FixityDirection -> Int -> [String] -> [(String, Fixity)]
-fixity a p = map (,Fixity "" p a)
+fixity a p = map (,Fixity (SourceText "") p a)
 
