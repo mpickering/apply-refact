@@ -6,7 +6,7 @@ module Refact.Fixity (applyFixities) where
 import SrcLoc
 
 import Refact.Utils
-import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..))
+import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
 import HsExpr
 import RdrName
 import OccName
