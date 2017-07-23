@@ -1,3 +1,11 @@
+v0.4.1.0
+
+	* 8.2 release compatability
+
+v0.4.0.0
+
+	* 8.2rc2 compatability
+
 v0.3.0.1
 
 	* Version bound tweaking to build with optparse-applicative 0.13
