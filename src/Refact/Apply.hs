@@ -250,16 +250,16 @@ exprSub _ _ e = return e
 -- it is not specific enough. Instead we match on some bigger context which
 -- is contains the located name we want to replace.
 identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
-identSub m subs old@(GHC.FunRhs (GHC.L _ name) _) =
+identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
   resolveRdrName' subst (findName m) old subs name
   where
     subst :: FunBind -> Name -> M FunBind
-    subst (GHC.FunRhs n b) new = do
+    subst (GHC.FunRhs n b s) new = do
       let fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
-      return $ GHC.FunRhs new b
+      return $ GHC.FunRhs new b s
     subst o _ = return o
 identSub _ _ e = return e
 
