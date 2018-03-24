@@ -50,7 +50,6 @@ import Control.Arrow
 
 import Debug.Trace
 
-import Data.Monoid
 import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R

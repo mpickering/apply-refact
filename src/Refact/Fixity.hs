@@ -109,7 +109,7 @@ findFixity fs r = askFix fs (getIdent r)
 askFix :: [(String, Fixity)] -> String -> Fixity
 askFix xs = \k -> lookupWithDefault defaultFixity k xs
     where
-        lookupWithDefault def k mp1 = fromMaybe def $ lookup k mp1
+        lookupWithDefault def_v k mp1 = fromMaybe def_v $ lookup k mp1
 
 
 
