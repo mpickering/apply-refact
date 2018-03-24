@@ -3,6 +3,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
+{-# LANGUAGE GADTs #-}
 module Refact.Apply
   (
     runRefactoring
@@ -20,7 +21,7 @@ import Language.Haskell.GHC.ExactPrint.Annotate
 import Language.Haskell.GHC.ExactPrint.Delta
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Print
-import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
 
 import Data.Maybe
@@ -181,7 +182,7 @@ runRefactoring as m RemoveAsKeyword{..} =
   return (as, removeAsKeyword m)
   where
     removeAsKeyword = everywhere (mkT go)
-    go :: LImportDecl GHC.RdrName -> LImportDecl GHC.RdrName
+    go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
     go imp@(GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
                     | otherwise =  imp
 
@@ -193,14 +194,14 @@ parseModuleName ss _ _ s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
       newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
   in return (newAnns, newMN)
-parseBind :: Parser (GHC.LHsBind GHC.RdrName)
+parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
   case parseDecl dyn fname s of
     -- Safe as we add no annotations to the ValD
     Right (as, GHC.L l (GHC.ValD b)) -> Right (as, GHC.L l b)
     Right (_, GHC.L l _) -> Left (l, "Not a HsBind")
     Left e -> Left e
-parseMatch :: Parser (GHC.LMatch GHC.RdrName (GHC.LHsExpr GHC.RdrName))
+parseMatch :: Parser (GHC.LMatch GHC.GhcPs (GHC.LHsExpr GHC.GhcPs))
 parseMatch dyn fname s =
   case parseBind dyn fname s of
     Right (as, GHC.L l GHC.FunBind{fun_matches}) ->
@@ -255,7 +256,8 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
   where
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunRhs n b s) new = do
-      let fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
+      let fakeExpr :: Located (GHC.Pat GhcPs)
+          fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))

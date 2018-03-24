@@ -9,11 +9,12 @@ import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
 import HsExpr
 import RdrName
+import HsExtension
 import OccName
 import PlaceHolder
 import Data.Generics hiding (Fixity)
 import Data.Maybe
-import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 
 import Control.Monad.State
 import qualified Data.Map as Map
@@ -25,7 +26,7 @@ applyFixities :: Anns -> Module -> (Anns, Module)
 applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m) as
                      in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
 
-expFix :: LHsExpr RdrName -> M (LHsExpr RdrName)
+expFix :: LHsExpr GhcPs -> M (LHsExpr GhcPs)
 expFix (L loc (OpApp l op _ r)) =
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
@@ -47,11 +48,11 @@ moveDelta old new = do
 mkOpAppRn ::
              [(String, Fixity)]
           -> SrcSpan
-          -> LHsExpr RdrName              -- Left operand; already rearrange
-          -> LHsExpr RdrName -> Fixity            -- Operator and fixity
-          -> LHsExpr RdrName                      -- Right operand (not an OpApp, but might
+          -> LHsExpr GhcPs              -- Left operand; already rearrange
+          -> LHsExpr GhcPs -> Fixity            -- Operator and fixity
+          -> LHsExpr GhcPs                      -- Right operand (not an OpApp, but might
                                                 -- be a NegApp)
-          -> M (LHsExpr RdrName)
+          -> M (LHsExpr GhcPs)
 
 -- (e11 `op1` e12) `op2` e2
 mkOpAppRn fs loc e1@(L _ (OpApp e11 op1 p e12)) op2 fix2 e2

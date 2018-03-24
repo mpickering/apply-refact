@@ -1,6 +1,5 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE TupleSections  #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
 {-# LANGUAGE GADTs  #-}
 {-# LANGUAGE RankNTypes  #-}
@@ -35,6 +34,7 @@ import HsExpr as GHC hiding (Stmt)
 import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
+import qualified HsExtension as GHC
 import qualified ApiAnnotation as GHC
 import qualified FastString    as GHC
 import qualified GHC hiding (parseModule)
@@ -55,21 +55,21 @@ import Unsafe.Coerce
 --
 type M a = State Anns a
 
-type Module = (GHC.Located (GHC.HsModule GHC.RdrName))
+type Module = (GHC.Located (GHC.HsModule GHC.GhcPs))
 
-type Expr = GHC.Located (GHC.HsExpr GHC.RdrName)
+type Expr = GHC.Located (GHC.HsExpr GHC.GhcPs)
 
-type Type = GHC.Located (GHC.HsType GHC.RdrName)
+type Type = GHC.Located (GHC.HsType GHC.GhcPs)
 
-type Decl = GHC.Located (GHC.HsDecl GHC.RdrName)
+type Decl = GHC.Located (GHC.HsDecl GHC.GhcPs)
 
-type Pat = GHC.LPat GHC.RdrName
+type Pat = GHC.LPat GHC.GhcPs
 
 type Name = GHC.Located GHC.RdrName
 
-type Stmt = ExprLStmt GHC.RdrName
+type Stmt = ExprLStmt GHC.GhcPs
 
-type Import = LImportDecl GHC.RdrName
+type Import = LImportDecl GHC.GhcPs
 
 type FunBind = HsMatchContext GHC.RdrName
 
