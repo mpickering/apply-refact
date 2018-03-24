@@ -1,4 +1,4 @@
-module Test where
+module Main where
 
 import Test.Tasty
 import Test.Tasty.Golden
@@ -7,7 +7,7 @@ import System.FilePath
 
 import Options.Applicative
 
-import Main hiding (main)
+import Refact.Run
 import Refact.Apply
 
 import System.IO.Silently
