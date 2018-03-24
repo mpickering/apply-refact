@@ -1,3 +1,5 @@
 .stack-work/
 tests/examples/*.out
+shell.nix
+tags
 
