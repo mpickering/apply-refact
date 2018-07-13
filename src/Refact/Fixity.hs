@@ -11,7 +11,6 @@ import HsExpr
 import RdrName
 import HsExtension
 import OccName
-import PlaceHolder
 import Data.Generics hiding (Fixity)
 import Data.Maybe
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
@@ -27,7 +26,7 @@ applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m
                      in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
 
 expFix :: LHsExpr GhcPs -> M (LHsExpr GhcPs)
-expFix (L loc (OpApp f l op r)) =
+expFix (L loc (OpApp _ l op r)) =
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
 expFix e = return e
@@ -55,23 +54,24 @@ mkOpAppRn ::
           -> M (LHsExpr GhcPs)
 
 -- (e11 `op1` e12) `op2` e2
-mkOpAppRn fs loc e1@(L _ (OpApp fix1 e11 op1 e12)) op2 fix2 e2
+mkOpAppRn fs loc e1@(L _ (OpApp x1 e11 op1 e12)) op2 fix2 e2
   | nofix_error
-  = return $ L loc (OpApp fix2 e1 op2 e2)
+  = return $ L loc (OpApp noExt e1 op2 e2)
 
   | associate_right = do
     new_e <- mkOpAppRn fs loc' e12 op2 fix2 e2
     moveDelta (mkAnnKey e12) (mkAnnKey new_e)
-    return $ L loc (OpApp fix1 e11 op1 new_e)
+    return $ L loc (OpApp x1 e11 op1 new_e)
   where
     loc'= combineLocs e12 e2
+    fix1 = findFixity fs op1
     (nofix_error, associate_right) = compareFixity fix1 fix2
 
 ---------------------------
 --      (- neg_arg) `op` e2
 mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
   | nofix_error
-  = return (L loc (OpApp fix2 e1 op2 e2))
+  = return (L loc (OpApp noExt e1 op2 e2))
 
   | associate_right
   = do
@@ -93,14 +93,14 @@ mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
 --      e1 `op` - neg_arg
 mkOpAppRn _ loc e1 op1 fix1 e2@(L _ (NegApp {}))     -- NegApp can occur on the right
   | not associate_right                 -- We *want* right association
-  = return $ L loc (OpApp fix1 e1 op1 e2)
+  = return $ L loc (OpApp noExt e1 op1 e2)
   where
     (_, associate_right) = compareFixity fix1 negateFixity
 
 ---------------------------
 --      Default case
-mkOpAppRn _ loc e1 op fix e2                  -- Default case, no rearrangment
-  = return $ L loc (OpApp fix e1 op e2)
+mkOpAppRn _ loc e1 op _fix e2                  -- Default case, no rearrangment
+  = return $ L loc (OpApp noExt e1 op e2)
 
 findFixity :: [(String, Fixity)] -> Expr -> Fixity
 findFixity fs r = askFix fs (getIdent r)
