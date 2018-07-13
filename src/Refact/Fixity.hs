@@ -27,13 +27,13 @@ applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m
                      in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
 
 expFix :: LHsExpr GhcPs -> M (LHsExpr GhcPs)
-expFix (L loc (OpApp l op _ r)) =
+expFix (L loc (OpApp f l op r)) =
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
 expFix e = return e
 
 getIdent :: Expr -> String
-getIdent (unLoc -> HsVar (L _ n)) = occNameString . rdrNameOcc $ n
+getIdent (unLoc -> HsVar _ (L _ n)) = occNameString . rdrNameOcc $ n
 getIdent _ = error "Must be HsVar"
 
 
@@ -55,30 +55,29 @@ mkOpAppRn ::
           -> M (LHsExpr GhcPs)
 
 -- (e11 `op1` e12) `op2` e2
-mkOpAppRn fs loc e1@(L _ (OpApp e11 op1 p e12)) op2 fix2 e2
+mkOpAppRn fs loc e1@(L _ (OpApp fix1 e11 op1 e12)) op2 fix2 e2
   | nofix_error
-  = return $ L loc (OpApp e1 op2 p e2)
+  = return $ L loc (OpApp fix2 e1 op2 e2)
 
   | associate_right = do
     new_e <- mkOpAppRn fs loc' e12 op2 fix2 e2
     moveDelta (mkAnnKey e12) (mkAnnKey new_e)
-    return $ L loc (OpApp e11 op1 p new_e)
+    return $ L loc (OpApp fix1 e11 op1 new_e)
   where
-    fix1 = findFixity fs op1
     loc'= combineLocs e12 e2
     (nofix_error, associate_right) = compareFixity fix1 fix2
 
 ---------------------------
 --      (- neg_arg) `op` e2
-mkOpAppRn fs loc e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
+mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
   | nofix_error
-  = return (L loc (OpApp e1 op2 PlaceHolder e2))
+  = return (L loc (OpApp fix2 e1 op2 e2))
 
   | associate_right
   = do
       new_e <- mkOpAppRn fs loc' neg_arg op2 fix2 e2
       moveDelta (mkAnnKey neg_arg) (mkAnnKey new_e)
-      let res = L loc (NegApp new_e neg_name)
+      let res = L loc (NegApp noExt new_e neg_name)
           key = mkAnnKey res
           ak  = AnnKey loc (CN "OpApp")
       opAnn <- gets (fromMaybe annNone . Map.lookup ak)
@@ -92,16 +91,16 @@ mkOpAppRn fs loc e1@(L _ (NegApp neg_arg neg_name)) op2 fix2 e2
 
 ---------------------------
 --      e1 `op` - neg_arg
-mkOpAppRn _ loc e1 op1 fix1 e2@(L _ (NegApp _ _))     -- NegApp can occur on the right
+mkOpAppRn _ loc e1 op1 fix1 e2@(L _ (NegApp {}))     -- NegApp can occur on the right
   | not associate_right                 -- We *want* right association
-  = return $ L loc (OpApp e1 op1 PlaceHolder e2)
+  = return $ L loc (OpApp fix1 e1 op1 e2)
   where
     (_, associate_right) = compareFixity fix1 negateFixity
 
 ---------------------------
 --      Default case
-mkOpAppRn _ loc e1 op _ e2                  -- Default case, no rearrangment
-  = return $ L loc (OpApp e1 op PlaceHolder e2)
+mkOpAppRn _ loc e1 op fix e2                  -- Default case, no rearrangment
+  = return $ L loc (OpApp fix e1 op e2)
 
 findFixity :: [(String, Fixity)] -> Expr -> Fixity
 findFixity fs r = askFix fs (getIdent r)
