@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                apply-refact
-version:             0.5.0.0
+version:             0.6.0.0
 synopsis:            Perform refactorings specified by the refact library.
 description:         Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
 license:             BSD3
@@ -32,8 +32,8 @@ library
   GHC-Options: -Wall
   build-depends: base >=4.8 && < 5
                , refact >= 0.2
-               , ghc-exactprint >= 0.5.6.1
-               , ghc >= 8.4.0 && < 8.6
+               , ghc-exactprint >= 0.5.7.0
+               , ghc >= 8.4.0 && < 8.8
                , containers
                , syb
                , mtl
@@ -59,8 +59,8 @@ executable refactor
   ghc-options: -Wall -fno-warn-unused-do-bind
   build-depends: base >= 4.8 && < 5
                , refact >= 0.2
-               , ghc-exactprint >= 0.5.6.1
-               , ghc >= 8.4.0 && < 8.6
+               , ghc-exactprint >= 0.5.7.0
+               , ghc >= 8.4.0 && < 8.8
                , containers
                , syb
                , mtl
@@ -92,8 +92,8 @@ Test-Suite test
                      , tasty-expected-failure
                      , base < 5
                , refact >= 0.2
-               , ghc-exactprint >= 0.5.6.1
-               , ghc >= 8.4.0 && < 8.6
+               , ghc-exactprint >= 0.5.7.0
+               , ghc >= 8.4.0 && < 8.8
                , containers
                , syb
                , mtl
