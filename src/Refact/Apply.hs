@@ -197,7 +197,7 @@ parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
   case parseDecl dyn fname s of
     -- Safe as we add no annotations to the ValD
-    Right (as, GHC.L l (GHC.ValD b)) -> Right (as, GHC.L l b)
+    Right (as, GHC.L l (GHC.ValD _ b)) -> Right (as, GHC.L l b)
     Right (_, GHC.L l _) -> Left (l, "Not a HsBind")
     Left e -> Left e
 parseMatch :: Parser (GHC.LMatch GHC.GhcPs (GHC.LHsExpr GHC.GhcPs))
@@ -222,22 +222,22 @@ substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     )
 
 stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
-stmtSub m subs old@(GHC.L _ (BodyStmt (GHC.L _ (HsVar (L _ name))) _ _ _) ) =
+stmtSub m subs old@(GHC.L _ (BodyStmt _ (GHC.L _ (HsVar _ (L _ name))) _ _) ) =
   resolveRdrName m (findStmt m) old subs name
 stmtSub _ _ e = return e
 
 patSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
-patSub m subs old@(GHC.L _ (VarPat (L _ name))) =
+patSub m subs old@(GHC.L _ (VarPat _ (L _ name))) =
   resolveRdrName m (findPat m) old subs name
 patSub _ _ e = return e
 
 typeSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Type -> M Type
-typeSub m subs old@(GHC.L _ (HsTyVar _ (L _ name))) =
+typeSub m subs old@(GHC.L _ (HsTyVar _ _ (L _ name))) =
   resolveRdrName m (findType m) old subs name
 typeSub _ _ e = return e
 
 exprSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
-exprSub m subs old@(GHC.L _ (HsVar (L _ name))) =
+exprSub m subs old@(GHC.L _ (HsVar _ (L _ name))) =
   resolveRdrName m (findExpr m) old subs name
 exprSub _ _ e = return e
 
@@ -256,7 +256,7 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunRhs n b s) new = do
       let fakeExpr :: Located (GHC.Pat GhcPs)
-          fakeExpr = GHC.L (getLoc new) (GHC.VarPat new)
+          fakeExpr = GHC.L (getLoc new) (GHC.VarPat noExt new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
