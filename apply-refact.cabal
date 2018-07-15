@@ -33,7 +33,7 @@ library
   build-depends: base >=4.8 && < 5
                , refact >= 0.2
                , ghc-exactprint >= 0.5.7.0
-               , ghc >= 8.4.0 && < 8.8
+               , ghc >= 8.6.0 && < 8.8
                , containers
                , syb
                , mtl
@@ -60,7 +60,7 @@ executable refactor
   build-depends: base >= 4.8 && < 5
                , refact >= 0.2
                , ghc-exactprint >= 0.5.7.0
-               , ghc >= 8.4.0 && < 8.8
+               , ghc >= 8.6.0 && < 8.8
                , containers
                , syb
                , mtl
@@ -93,7 +93,7 @@ Test-Suite test
                      , base < 5
                , refact >= 0.2
                , ghc-exactprint >= 0.5.7.0
-               , ghc >= 8.4.0 && < 8.8
+               , ghc >= 8.6.0 && < 8.8
                , containers
                , syb
                , mtl
