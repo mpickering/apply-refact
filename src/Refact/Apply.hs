@@ -2,7 +2,6 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE GADTs #-}
 module Refact.Apply
   (
