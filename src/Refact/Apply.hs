@@ -7,7 +7,6 @@
 module Refact.Apply
   (
     runRefactoring
-  , applyRefactorings
 
   -- * Support for runPipe in the main process
   , Verbosity(..)
@@ -28,7 +27,6 @@ import Data.Maybe
 import Data.List hiding (find)
 import Data.Ord
 
-import Control.Monad
 import Control.Monad.State
 import Control.Monad.Identity
 import Data.Data
@@ -50,11 +48,10 @@ import Control.Arrow
 
 import Debug.Trace
 
-import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
+                    , modifyAnnKey, replaceAnnKey, Import)
 
 -- library access to perform the substitutions
 
@@ -63,26 +60,6 @@ refactOptions = stringOptions { epRigidity = RigidLayout }
 
 rigidLayout :: DeltaOptions
 rigidLayout = deltaOptions RigidLayout
-
--- | Apply a set of refactorings as supplied by hlint
-applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
-applyRefactorings optionsPos inp file = do
-  (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
-  let noOverlapInp = removeOverlap Silent inp
-      refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
-
-      posFilter (_, rs) =
-        case optionsPos of
-          Nothing -> True
-          Just p  -> any (flip spans p . pos) rs
-      filtRefacts = filter posFilter refacts
-
-  -- need a check here to avoid overlap
-  (ares, res) <- return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
-  return output
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
