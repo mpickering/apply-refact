@@ -47,6 +47,7 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsRoundtrip     = False
                   , optionsDebug         = False
                   , optionsVersion       = False
+                  , optionsLanguage      = ["LambdaCase"]
                   , optionsPos           = Nothing
                   }
           action =
