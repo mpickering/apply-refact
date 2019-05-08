@@ -48,6 +48,8 @@ file. The user is prompted whether to perform each hint before it is performed.
 The `--pos` option is intended to be used by tooling in order to specify which
 specific hint should be performed.
 
+Multiple `-X` options may be provided to specify additional default language pragmas which might affect parsing, such as `-XLambdaCase` or `-XRankNTypes`.
+
 ## Refact Files
 
 Refact files should be the result of `show` on a value of type `[(String,

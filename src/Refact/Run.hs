@@ -6,7 +6,13 @@ module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Print
-import Language.Haskell.GHC.ExactPrint.Parsers (parseModuleWithOptions)
+import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
+  ( defaultCppOptions
+  , ghcWrapper
+  , initDynFlags
+  , parseModuleApiAnnsWithCppInternal
+  , postParseTransform
+  )
 import Language.Haskell.GHC.ExactPrint.Utils
 
 
@@ -16,6 +22,8 @@ import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
+import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
+import qualified GHC as GHC (setSessionDynFlags, ParsedSource)
 
 import Options.Applicative
 import Data.Maybe
@@ -89,6 +97,7 @@ data Options = Options
   , optionsDebug :: Bool
   , optionsRoundtrip :: Bool
   , optionsVersion :: Bool
+  , optionsLanguage :: [String]
   , optionsPos     :: Maybe (Int, Int)
   }
 
@@ -133,6 +142,11 @@ options =
     switch (long "version"
            <> help "Display version number")
     <*>
+    many (strOption (long "language"
+                    <> short 'X'
+                    <> help "Language extensions (e.g. LambdaCase, RankNTypes)"
+                    <> metavar "Extensions"))
+    <*>
     option (Just <$> (str >>= parsePos))
            (long "pos"
            <> value Nothing
@@ -175,13 +189,21 @@ filterFilename = do
 
 -- Pipe
 
+parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
+parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
+  dflags1 <- EP.initDynFlags fp
+  (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
+  _ <- GHC.setSessionDynFlags dflags2
+  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
+  return $ EP.postParseTransform res rigidLayout
 
 runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
+  let ghcArgs = map ("-X" ++) optionsLanguage
   when (verb == Loud) (traceM "Parsing module")
   (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
+              <$> parseModuleWithArgs ghcArgs file
   when optionsDebug (putStrLn (showAnnData as 0 m))
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
