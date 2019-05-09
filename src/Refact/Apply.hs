@@ -4,17 +4,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GADTs #-}
 module Refact.Apply
-  (
-    runRefactoring
+  ( runRefactoring
   , applyRefactorings
+  , applyRefactorings'
+  , ApplyOptions(..)
+  , defaultApplyOptions
   , RawHintList
-
-  -- * Support for runPipe in the main process
-  , parseModuleWithArgs
   , RefactoringLoop
   , Verbosity(..)
   , removeOverlap
-  , refactOptions
   )  where
 
 import Language.Haskell.GHC.ExactPrint
@@ -77,16 +75,39 @@ rigidLayout = deltaOptions RigidLayout
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
+data ApplyOptions = ApplyOptions
+  { optionsVerbosity :: Verbosity
+  , optionsDebug :: Bool
+  , optionsLanguage :: [String]
+  , optionsPos     :: Maybe (Int, Int)
+  }
+
+defaultApplyOptions :: ApplyOptions
+defaultApplyOptions = ApplyOptions
+  { optionsVerbosity = Silent
+  , optionsDebug  = False
+  , optionsLanguage  = []
+  , optionsPos  = Nothing
+  }
+
 type RawHintList = [(String, [Refactoring R.SrcSpan])]
 
 type RefactoringLoop = Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])] -> MaybeT IO (Anns, Module)
 
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings :: Maybe (Int, Int) -> RawHintList -> FilePath -> IO String
-applyRefactorings optionsPos inp file = do
+applyRefactorings optionsPos hints = applyRefactorings' (defaultApplyOptions{ optionsPos }) hints Nothing
+
+applyRefactorings' :: ApplyOptions -> RawHintList -> Maybe RefactoringLoop -> FilePath  -> IO String
+applyRefactorings' ApplyOptions{..} hints maybeRefactoringLoop file = do
+  let logAt lvl = when (optionsVerbosity >= lvl) . traceM
+  let debugOut = when optionsDebug . putStrLn
+  let ghcArgs = map ("-X" ++) optionsLanguage
+  logAt Loud "Parsing module"
   (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
-  let noOverlapInp = removeOverlap Silent inp
+              <$> parseModuleWithArgs ghcArgs file
+  debugOut (showAnnData as 0 m)
+  let noOverlapInp = removeOverlap optionsVerbosity hints
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
       posFilter (_, rs) =
@@ -95,11 +116,17 @@ applyRefactorings optionsPos inp file = do
           Just p  -> any (flip spans p . pos) rs
       filtRefacts = filter posFilter refacts
 
+  logAt Normal $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
+  logAt Loud $ show filtRefacts
   -- need a check here to avoid overlap
-  (ares, res) <- return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
-  return output
+  (ares, res) <- case maybeRefactoringLoop of
+    Just refactoringLoop ->
+         fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
+    Nothing ->
+         return . flip evalState 0 $
+           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
+  debugOut (showAnnData ares 0 res)
+  return . runIdentity $ exactPrintWithOptions refactOptions res ares
 
 parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
 parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do

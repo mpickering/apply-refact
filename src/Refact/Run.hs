@@ -2,17 +2,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Print
-import Language.Haskell.GHC.ExactPrint.Utils
 
-import Refact.Types hiding (SrcSpan)
 import Refact.Apply
-import Refact.Fixity
-import Refact.Utils (toGhcSrcSpan, Module)
-import qualified SrcLoc as GHC
+import Refact.Utils (Module)
 
 import Options.Applicative
 import Data.Maybe
@@ -28,14 +24,12 @@ import qualified System.PosixCompat.Files as F
 
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Identity
 
 import Paths_apply_refact
 import Data.Version
 
 import Debug.Trace
 
-import SrcLoc
 import Text.Read
 import Data.Char
 
@@ -152,7 +146,6 @@ optionsWithHelp
           <> header "refactor" )
 
 
-
 -- Given base directory finds all haskell source files
 findHsFiles :: FilePath -> IO [FilePath]
 findHsFiles = find filterDirectory filterFilename
@@ -181,35 +174,18 @@ filterFilename = do
 runPipe :: RunOptions -> FilePath  -> IO ()
 runPipe RunOptions{..} file = do
   let logAt lvl = when (optionsVerbosity >= lvl) . traceM
-  let debugOut = when optionsDebug . putStrLn
-  let ghcArgs = map ("-X" ++) optionsLanguage
-  logAt Loud "Parsing module"
-  (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithArgs ghcArgs file
-  debugOut (showAnnData as 0 m)
-  rawhints <- getHints optionsRefactFile
+
+  rawHints <- getHints optionsRefactFile
   logAt Loud "Got raw hints"
-  let inp :: RawHintList = read rawhints
-      n = length inp
-  logAt Loud $ "Read " ++ show n ++ " hints"
-  let noOverlapInp = removeOverlap optionsVerbosity inp
-      refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
+  let hints :: RawHintList = read rawHints
+  logAt Loud $ "Read " ++ show (length hints) ++ " hints"
 
-      posFilter (_, rs) =
-        case optionsPos of
-          Nothing -> True
-          Just p  -> any (flip spans p . pos) rs
-      filtRefacts = filter posFilter refacts
+  output <- applyRefactorings'
+    ApplyOptions{..}
+    hints
+    (if optionsStep then Just refactoringLoop else Nothing)
+    file
 
-  logAt Normal $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
-  logAt Loud $ show filtRefacts
-  -- need a check here to avoid overlap
-  (ares, res) <- if optionsStep
-                   then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
-                   else return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  debugOut (showAnnData ares 0 res)
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
