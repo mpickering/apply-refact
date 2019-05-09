@@ -50,7 +50,7 @@ import Data.Char
 
 refactMain :: IO ()
 refactMain = do
-  o@Options{..} <- execParser optionsWithHelp
+  o@RunOptions{..} <- execParser optionsWithHelp
   when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
   unless (isJust optionsTarget || isJust optionsRefactFile)
     (error "Must specify either the target file or the refact file")
@@ -85,7 +85,7 @@ parsePos s =
 
 data Target = StdIn | File FilePath
 
-data Options = Options
+data RunOptions = RunOptions
   { optionsTarget   :: Maybe FilePath -- ^ Where to process hints
   , optionsRefactFile :: Maybe FilePath -- ^ The refactorings to process
   , optionsInplace  :: Bool
@@ -99,9 +99,9 @@ data Options = Options
   , optionsPos     :: Maybe (Int, Int)
   }
 
-options :: Parser Options
+options :: Parser RunOptions
 options =
-  Options <$>
+  RunOptions <$>
     optional (argument str (metavar "TARGET"))
     <*>
     option (Just <$> str)
@@ -152,7 +152,7 @@ options =
            <> help "Apply hints relevant to a specific position")
 
 
-optionsWithHelp :: ParserInfo Options
+optionsWithHelp :: ParserInfo RunOptions
 optionsWithHelp
   =
     info (helper <*> options)
@@ -195,8 +195,8 @@ parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
   res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
   return $ EP.postParseTransform res rigidLayout
 
-runPipe :: Options -> FilePath  -> IO ()
-runPipe Options{..} file = do
+runPipe :: RunOptions -> FilePath  -> IO ()
+runPipe RunOptions{..} file = do
   let verb = optionsVerbosity
   let ghcArgs = map ("-X" ++) optionsLanguage
   when (verb == Loud) (traceM "Parsing module")
