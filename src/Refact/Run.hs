@@ -15,8 +15,6 @@ import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
   )
 import Language.Haskell.GHC.ExactPrint.Utils
 
-
-import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 import Refact.Apply
 import Refact.Fixity
@@ -207,7 +205,7 @@ runPipe Options{..} file = do
   when optionsDebug (putStrLn (showAnnData as 0 m))
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
-  let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
+  let inp :: RawHintList = read rawhints
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
   let noOverlapInp = removeOverlap verb inp

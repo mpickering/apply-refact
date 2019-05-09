@@ -7,6 +7,7 @@ module Refact.Apply
   (
     runRefactoring
   , applyRefactorings
+  , RawHintList
 
   -- * Support for runPipe in the main process
   , Verbosity(..)
@@ -65,8 +66,10 @@ rigidLayout = deltaOptions RigidLayout
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
+type RawHintList = [(String, [Refactoring R.SrcSpan])]
+
 -- | Apply a set of refactorings as supplied by hlint
-applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
+applyRefactorings :: Maybe (Int, Int) -> RawHintList -> FilePath -> IO String
 applyRefactorings optionsPos inp file = do
   (as, m) <- either (error . show) (uncurry applyFixities)
               <$> parseModuleWithOptions rigidLayout file
@@ -88,12 +91,12 @@ applyRefactorings optionsPos inp file = do
 
 -- Filters out overlapping ideas, picking the first idea in a set of overlapping ideas.
 -- If two ideas start in the exact same place, pick the largest edit.
-removeOverlap :: Verbosity -> [(String, [Refactoring R.SrcSpan])] -> [(String, [Refactoring R.SrcSpan])]
+removeOverlap :: Verbosity -> RawHintList -> RawHintList
 removeOverlap verb = dropOverlapping . sortBy f . summarize
   where
     -- We want to consider all Refactorings of a single idea as a unit, so compute a summary
     -- SrcSpan that encompasses all the Refactorings within each idea.
-    summarize :: [(String, [Refactoring R.SrcSpan])] -> [(String, (R.SrcSpan, [Refactoring R.SrcSpan]))]
+    summarize :: RawHintList -> [(String, (R.SrcSpan, [Refactoring R.SrcSpan]))]
     summarize ideas = [ (s, (foldr1 summary (map pos rs), rs)) | (s, rs) <- ideas, not (null rs) ]
 
     summary (R.SrcSpan sl1 sc1 el1 ec1)
