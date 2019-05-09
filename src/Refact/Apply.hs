@@ -10,6 +10,7 @@ module Refact.Apply
   , RawHintList
 
   -- * Support for runPipe in the main process
+  , RefactoringLoop
   , Verbosity(..)
   , rigidLayout
   , removeOverlap
@@ -31,6 +32,7 @@ import Data.Ord
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Identity
+import Control.Monad.Trans.Maybe
 import Data.Data
 import Data.Generics.Schemes
 
@@ -54,7 +56,7 @@ import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
+                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, Module)
 
 -- library access to perform the substitutions
 
@@ -67,6 +69,8 @@ rigidLayout = deltaOptions RigidLayout
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
 type RawHintList = [(String, [Refactoring R.SrcSpan])]
+
+type RefactoringLoop = Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])] -> MaybeT IO (Anns, Module)
 
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings :: Maybe (Int, Int) -> RawHintList -> FilePath -> IO String
