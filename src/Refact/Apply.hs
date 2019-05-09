@@ -63,6 +63,8 @@ refactOptions = stringOptions { epRigidity = RigidLayout }
 rigidLayout :: DeltaOptions
 rigidLayout = deltaOptions RigidLayout
 
+data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
+
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
 applyRefactorings optionsPos inp file = do
@@ -83,7 +85,6 @@ applyRefactorings optionsPos inp file = do
   let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   return output
 
-data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
 -- Filters out overlapping ideas, picking the first idea in a set of overlapping ideas.
 -- If two ideas start in the exact same place, pick the largest edit.
