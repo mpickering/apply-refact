@@ -197,18 +197,19 @@ parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
 
 runPipe :: RunOptions -> FilePath  -> IO ()
 runPipe RunOptions{..} file = do
-  let verb = optionsVerbosity
+  let logAt lvl = when (optionsVerbosity >= lvl) . traceM
+  let debugOut = when optionsDebug . putStrLn
   let ghcArgs = map ("-X" ++) optionsLanguage
-  when (verb == Loud) (traceM "Parsing module")
+  logAt Loud "Parsing module"
   (as, m) <- either (error . show) (uncurry applyFixities)
               <$> parseModuleWithArgs ghcArgs file
-  when optionsDebug (putStrLn (showAnnData as 0 m))
+  debugOut (showAnnData as 0 m)
   rawhints <- getHints optionsRefactFile
-  when (verb == Loud) (traceM "Got raw hints")
+  logAt Loud "Got raw hints"
   let inp :: RawHintList = read rawhints
       n = length inp
-  when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
-  let noOverlapInp = removeOverlap verb inp
+  logAt Loud $ "Read " ++ show n ++ " hints"
+  let noOverlapInp = removeOverlap optionsVerbosity inp
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
       posFilter (_, rs) =
@@ -217,22 +218,21 @@ runPipe RunOptions{..} file = do
           Just p  -> any (flip spans p . pos) rs
       filtRefacts = filter posFilter refacts
 
-
-  when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
-  when (verb == Loud) (traceM $ show filtRefacts)
+  logAt Normal $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
+  logAt Loud $ show filtRefacts
   -- need a check here to avoid overlap
   (ares, res) <- if optionsStep
                    then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
                    else return . flip evalState 0 $
                           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  when (optionsDebug) (putStrLn (showAnnData ares 0 res))
+  debugOut (showAnnData ares 0 res)
   let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
            Nothing -> putStr output
            Just f  -> do
-            when (verb == Loud) (traceM $ "Writing result to " ++ f)
+            logAt Loud $ "Writing result to " ++ f
             writeFile f output
 
 data LoopOption = LoopOption
