@@ -190,7 +190,9 @@ filterFilename = do
 parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
 parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
   dflags1 <- EP.initDynFlags fp
-  (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
+  (dflags2, unusedArgs, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
+  liftIO $ unless (null unusedArgs)
+    (fail ("Unrecognized GHC args: " ++ intercalate ", " (map GHC.unLoc unusedArgs)))
   _ <- GHC.setSessionDynFlags dflags2
   res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
   return $ EP.postParseTransform res rigidLayout
