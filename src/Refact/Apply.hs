@@ -10,9 +10,9 @@ module Refact.Apply
   , RawHintList
 
   -- * Support for runPipe in the main process
+  , parseModuleWithArgs
   , RefactoringLoop
   , Verbosity(..)
-  , rigidLayout
   , removeOverlap
   , refactOptions
   )  where
@@ -24,6 +24,13 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Print
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
+import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
+  ( defaultCppOptions
+  , ghcWrapper
+  , initDynFlags
+  , parseModuleApiAnnsWithCppInternal
+  , postParseTransform
+  )
 
 import Data.Maybe
 import Data.List hiding (find)
@@ -41,6 +48,8 @@ import HsImpExp
 import HsSyn hiding (Pat, Stmt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
+import qualified GHC (setSessionDynFlags, ParsedSource)
+import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
 import qualified OccName as GHC
 import Data.Generics hiding (GT)
 
@@ -92,6 +101,15 @@ applyRefactorings optionsPos inp file = do
   let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   return output
 
+parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
+parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
+  dflags1 <- EP.initDynFlags fp
+  (dflags2, unusedArgs, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
+  liftIO $ unless (null unusedArgs)
+    (fail ("Unrecognized GHC args: " ++ intercalate ", " (map GHC.unLoc unusedArgs)))
+  _ <- GHC.setSessionDynFlags dflags2
+  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
+  return $ EP.postParseTransform res rigidLayout
 
 -- Filters out overlapping ideas, picking the first idea in a set of overlapping ideas.
 -- If two ideas start in the exact same place, pick the largest edit.

@@ -6,13 +6,6 @@ module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Print
-import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
-  ( defaultCppOptions
-  , ghcWrapper
-  , initDynFlags
-  , parseModuleApiAnnsWithCppInternal
-  , postParseTransform
-  )
 import Language.Haskell.GHC.ExactPrint.Utils
 
 import Refact.Types hiding (SrcSpan)
@@ -20,8 +13,6 @@ import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
-import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
-import qualified GHC as GHC (setSessionDynFlags, ParsedSource)
 
 import Options.Applicative
 import Data.Maybe
@@ -186,16 +177,6 @@ filterFilename = do
 
 
 -- Pipe
-
-parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
-parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
-  dflags1 <- EP.initDynFlags fp
-  (dflags2, unusedArgs, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
-  liftIO $ unless (null unusedArgs)
-    (fail ("Unrecognized GHC args: " ++ intercalate ", " (map GHC.unLoc unusedArgs)))
-  _ <- GHC.setSessionDynFlags dflags2
-  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
-  return $ EP.postParseTransform res rigidLayout
 
 runPipe :: RunOptions -> FilePath  -> IO ()
 runPipe RunOptions{..} file = do
