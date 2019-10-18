@@ -76,7 +76,7 @@ parseVerbosity s =
              "2" -> Loud
              _   -> Normal
 
-parsePos :: Monad m => String -> m (Int, Int)
+parsePos :: MonadFail m => String -> m (Int, Int)
 parsePos s =
   case span isDigit s of
     (line, ',':col) ->

@@ -63,7 +63,7 @@ type Type = GHC.Located (GHC.HsType GHC.GhcPs)
 
 type Decl = GHC.Located (GHC.HsDecl GHC.GhcPs)
 
-type Pat = GHC.LPat GHC.GhcPs
+type Pat =  GHC.Located (GHC.Pat GHC.GhcPs)
 
 type Name = GHC.Located GHC.RdrName
 
