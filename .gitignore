@@ -1,4 +1,5 @@
 .stack-work/
+stack.yaml.lock
 tests/examples/*.out
 shell.nix
 tags

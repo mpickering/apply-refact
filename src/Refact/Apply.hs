@@ -1,3 +1,4 @@
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -302,23 +303,29 @@ insertComment k s as =
 
 
 -- Substitute the template into the original AST.
-doGenReplacement :: (Data ast, Data a)
+doGenReplacement :: (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
               => a
-              -> (GHC.Located ast -> Bool)
-              -> GHC.Located ast
-              -> GHC.Located ast
-              -> State (Anns, Bool) (GHC.Located ast)
+              -> (ast -> Bool)
+              -> ast
+              -> ast
+              -> State (Anns, Bool) ast
 doGenReplacement m p new old =
   if p old then do
                   s <- get
-                  let (v, st) = runState (modifyAnnKey m old new) (fst s)
+                  let n = decomposeSrcSpan new
+                      o = decomposeSrcSpan old
+                      (v, st) = runState (modifyAnnKey m o n) (fst s)
                   modify (const (st, True))
-                  return v
+                  return $ composeSrcSpan v
            else return old
 
-replaceWorker :: (Annotate a, Data mod) => Anns -> mod
-              -> Parser (GHC.Located a) -> Int
-              -> Refactoring GHC.SrcSpan -> (Anns, mod)
+replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
+              => Anns
+              -> mod
+              -> Parser a
+              -> Int
+              -> Refactoring GHC.SrcSpan
+              -> (Anns, mod)
 replaceWorker as m parser seed Replace{..} =
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
@@ -328,7 +335,7 @@ replaceWorker as m parser seed Replace{..} =
                               Left err -> error (show err)
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       replacementPred (GHC.L l _) = l == replExprLocation
-      transformation = everywhereM (mkM (doGenReplacement m replacementPred newExpr))
+      transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))
    in case runState (transformation m) (newAnns, False) of
         (finalM, (finalAs, True)) -> (finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
