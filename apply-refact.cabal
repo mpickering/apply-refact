@@ -2,7 +2,7 @@
 -- documentation, see http://haskell.org/cabal/users-guide/
 
 name:                apply-refact
-version:             0.6.0.0
+version:             0.7.0.0
 synopsis:            Perform refactorings specified by the refact library.
 description:         Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
 license:             BSD3

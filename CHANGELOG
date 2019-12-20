@@ -1,3 +1,8 @@
+v0.7.0.0
+
+  * 8.8 release compatability
+  * Specify language extensions using -X
+
 v0.6.0.0
 
   * 8.6 release compatibility
