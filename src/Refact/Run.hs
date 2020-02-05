@@ -2,28 +2,13 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DuplicateRecordFields #-}
 module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Print
-import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
-  ( defaultCppOptions
-  , ghcWrapper
-  , initDynFlags
-  , parseModuleApiAnnsWithCppInternal
-  , postParseTransform
-  )
-import Language.Haskell.GHC.ExactPrint.Utils
 
-
-import qualified Refact.Types as R
-import Refact.Types hiding (SrcSpan)
 import Refact.Apply
-import Refact.Fixity
-import Refact.Utils (toGhcSrcSpan, Module)
-import qualified SrcLoc as GHC
-import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
-import qualified GHC as GHC (setSessionDynFlags, ParsedSource)
+import Refact.Utils (Module)
 
 import Options.Applicative
 import Data.Maybe
@@ -39,20 +24,18 @@ import qualified System.PosixCompat.Files as F
 
 import Control.Monad
 import Control.Monad.State
-import Control.Monad.Identity
 
 import Paths_apply_refact
 import Data.Version
 
 import Debug.Trace
 
-import SrcLoc
 import Text.Read
 import Data.Char
 
 refactMain :: IO ()
 refactMain = do
-  o@Options{..} <- execParser optionsWithHelp
+  o@RunOptions{..} <- execParser optionsWithHelp
   when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
   unless (isJust optionsTarget || isJust optionsRefactFile)
     (error "Must specify either the target file or the refact file")
@@ -87,7 +70,7 @@ parsePos s =
 
 data Target = StdIn | File FilePath
 
-data Options = Options
+data RunOptions = RunOptions
   { optionsTarget   :: Maybe FilePath -- ^ Where to process hints
   , optionsRefactFile :: Maybe FilePath -- ^ The refactorings to process
   , optionsInplace  :: Bool
@@ -101,9 +84,9 @@ data Options = Options
   , optionsPos     :: Maybe (Int, Int)
   }
 
-options :: Parser Options
+options :: Parser RunOptions
 options =
-  Options <$>
+  RunOptions <$>
     optional (argument str (metavar "TARGET"))
     <*>
     option (Just <$> str)
@@ -154,14 +137,13 @@ options =
            <> help "Apply hints relevant to a specific position")
 
 
-optionsWithHelp :: ParserInfo Options
+optionsWithHelp :: ParserInfo RunOptions
 optionsWithHelp
   =
     info (helper <*> options)
           ( fullDesc
           <> progDesc "Automatically perform refactorings on haskell source files"
           <> header "refactor" )
-
 
 
 -- Given base directory finds all haskell source files
@@ -189,60 +171,34 @@ filterFilename = do
 
 -- Pipe
 
-parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
-parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
-  dflags1 <- EP.initDynFlags fp
-  (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
-  _ <- GHC.setSessionDynFlags dflags2
-  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
-  return $ EP.postParseTransform res rigidLayout
+runPipe :: RunOptions -> FilePath  -> IO ()
+runPipe RunOptions{..} file = do
+  let logAt lvl = when (optionsVerbosity >= lvl) . traceM
 
-runPipe :: Options -> FilePath  -> IO ()
-runPipe Options{..} file = do
-  let verb = optionsVerbosity
-  let ghcArgs = map ("-X" ++) optionsLanguage
-  when (verb == Loud) (traceM "Parsing module")
-  (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithArgs ghcArgs file
-  when optionsDebug (putStrLn (showAnnData as 0 m))
-  rawhints <- getHints optionsRefactFile
-  when (verb == Loud) (traceM "Got raw hints")
-  let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
-      n = length inp
-  when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
-  let noOverlapInp = removeOverlap verb inp
-      refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
+  rawHints <- getHints optionsRefactFile
+  logAt Loud "Got raw hints"
+  let hints :: RawHintList = read rawHints
+  logAt Loud $ "Read " ++ show (length hints) ++ " hints"
 
-      posFilter (_, rs) =
-        case optionsPos of
-          Nothing -> True
-          Just p  -> any (flip spans p . pos) rs
-      filtRefacts = filter posFilter refacts
+  output <- applyRefactorings'
+    ApplyOptions{..}
+    hints
+    (if optionsStep then Just refactoringLoop else Nothing)
+    file
 
-
-  when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
-  when (verb == Loud) (traceM $ show filtRefacts)
-  -- need a check here to avoid overlap
-  (ares, res) <- if optionsStep
-                   then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
-                   else return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  when (optionsDebug) (putStrLn (showAnnData ares 0 res))
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
   if optionsInplace && isJust optionsTarget
     then writeFile file output
     else case optionsOutput of
            Nothing -> putStr output
            Just f  -> do
-            when (verb == Loud) (traceM $ "Writing result to " ++ f)
+            logAt Loud $ "Writing result to " ++ f
             writeFile f output
 
 data LoopOption = LoopOption
                     { desc :: String
                     , perform :: MaybeT IO (Anns, Module) }
 
-refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
-                -> MaybeT IO (Anns, Module)
+refactoringLoop :: RefactoringLoop
 refactoringLoop as m [] = return (as, m)
 refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
 refactoringLoop as m hints@((hintDesc, rs): rss) =

@@ -1,3 +1,4 @@
+{-# LANGUAGE DuplicateRecordFields #-}
 module Main where
 
 import Test.Tasty
@@ -37,7 +38,7 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
     mkTest fp =
       let outfile = fp <.> "out"
           rfile   = fp <.> "refact"
-          topts = Options
+          topts = RunOptions
                   { optionsTarget       = Just fp
                   , optionsInplace       = False
                   , optionsOutput        = Just outfile

@@ -5,15 +5,15 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GADTs #-}
 module Refact.Apply
-  (
-    runRefactoring
+  ( runRefactoring
   , applyRefactorings
-
-  -- * Support for runPipe in the main process
+  , applyRefactorings'
+  , ApplyOptions(..)
+  , defaultApplyOptions
+  , RawHintList
+  , RefactoringLoop
   , Verbosity(..)
-  , rigidLayout
   , removeOverlap
-  , refactOptions
   )  where
 
 import Language.Haskell.GHC.ExactPrint
@@ -23,6 +23,13 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Print
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
+import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
+  ( defaultCppOptions
+  , ghcWrapper
+  , initDynFlags
+  , parseModuleApiAnnsWithCppInternal
+  , postParseTransform
+  )
 
 import Data.Maybe
 import Data.List hiding (find)
@@ -31,6 +38,7 @@ import Data.Ord
 import Control.Monad
 import Control.Monad.State
 import Control.Monad.Identity
+import Control.Monad.Trans.Maybe
 import Data.Data
 import Data.Generics.Schemes
 
@@ -39,6 +47,8 @@ import HsImpExp
 import HsSyn hiding (Pat, Stmt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
+import qualified GHC (setSessionDynFlags, ParsedSource)
+import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
 import qualified OccName as GHC
 import Data.Generics hiding (GT)
 
@@ -54,7 +64,7 @@ import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
+                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, Module)
 
 -- library access to perform the substitutions
 
@@ -64,12 +74,41 @@ refactOptions = stringOptions { epRigidity = RigidLayout }
 rigidLayout :: DeltaOptions
 rigidLayout = deltaOptions RigidLayout
 
+data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
+
+data ApplyOptions = ApplyOptions
+  { optionsVerbosity :: Verbosity
+  , optionsDebug :: Bool
+  , optionsLanguage :: [String]
+  , optionsPos     :: Maybe (Int, Int)
+  }
+
+defaultApplyOptions :: ApplyOptions
+defaultApplyOptions = ApplyOptions
+  { optionsVerbosity = Silent
+  , optionsDebug  = False
+  , optionsLanguage  = []
+  , optionsPos  = Nothing
+  }
+
+type RawHintList = [(String, [Refactoring R.SrcSpan])]
+
+type RefactoringLoop = Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])] -> MaybeT IO (Anns, Module)
+
 -- | Apply a set of refactorings as supplied by hlint
-applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
-applyRefactorings optionsPos inp file = do
+applyRefactorings :: Maybe (Int, Int) -> RawHintList -> FilePath -> IO String
+applyRefactorings optionsPos hints = applyRefactorings' (defaultApplyOptions{ optionsPos }) hints Nothing
+
+applyRefactorings' :: ApplyOptions -> RawHintList -> Maybe RefactoringLoop -> FilePath  -> IO String
+applyRefactorings' ApplyOptions{..} hints maybeRefactoringLoop file = do
+  let logAt lvl = when (optionsVerbosity >= lvl) . traceM
+  let debugOut = when optionsDebug . putStrLn
+  let ghcArgs = map ("-X" ++) optionsLanguage
+  logAt Loud "Parsing module"
   (as, m) <- either (error . show) (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
-  let noOverlapInp = removeOverlap Silent inp
+              <$> parseModuleWithArgs ghcArgs file
+  debugOut (showAnnData as 0 m)
+  let noOverlapInp = removeOverlap optionsVerbosity hints
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
       posFilter (_, rs) =
@@ -78,22 +117,36 @@ applyRefactorings optionsPos inp file = do
           Just p  -> any (flip spans p . pos) rs
       filtRefacts = filter posFilter refacts
 
+  logAt Normal $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints"
+  logAt Loud $ show filtRefacts
   -- need a check here to avoid overlap
-  (ares, res) <- return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
-  return output
+  (ares, res) <- case maybeRefactoringLoop of
+    Just refactoringLoop ->
+         fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
+    Nothing ->
+         return . flip evalState 0 $
+           foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
+  debugOut (showAnnData ares 0 res)
+  return . runIdentity $ exactPrintWithOptions refactOptions res ares
 
-data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
+parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
+parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
+  dflags1 <- EP.initDynFlags fp
+  (dflags2, unusedArgs, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
+  liftIO $ unless (null unusedArgs)
+    (fail ("Unrecognized GHC args: " ++ intercalate ", " (map GHC.unLoc unusedArgs)))
+  _ <- GHC.setSessionDynFlags dflags2
+  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
+  return $ EP.postParseTransform res rigidLayout
 
 -- Filters out overlapping ideas, picking the first idea in a set of overlapping ideas.
 -- If two ideas start in the exact same place, pick the largest edit.
-removeOverlap :: Verbosity -> [(String, [Refactoring R.SrcSpan])] -> [(String, [Refactoring R.SrcSpan])]
+removeOverlap :: Verbosity -> RawHintList -> RawHintList
 removeOverlap verb = dropOverlapping . sortBy f . summarize
   where
     -- We want to consider all Refactorings of a single idea as a unit, so compute a summary
     -- SrcSpan that encompasses all the Refactorings within each idea.
-    summarize :: [(String, [Refactoring R.SrcSpan])] -> [(String, (R.SrcSpan, [Refactoring R.SrcSpan]))]
+    summarize :: RawHintList -> [(String, (R.SrcSpan, [Refactoring R.SrcSpan]))]
     summarize ideas = [ (s, (foldr1 summary (map pos rs), rs)) | (s, rs) <- ideas, not (null rs) ]
 
     summary (R.SrcSpan sl1 sc1 el1 ec1)
