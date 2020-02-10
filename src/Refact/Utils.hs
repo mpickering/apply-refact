@@ -86,10 +86,10 @@ replace old new inp parent anns = do
   oldan <- Map.lookup old anns
   newan <- Map.lookup new anns
   oldDelta <- annEntryDelta  <$> Map.lookup parent anns
-  return $ Map.insert inp (combine oldDelta oldan newan) anns
+  return $ Map.insert inp (combine oldDelta new oldan newan) anns
 
-combine :: DeltaPos -> Annotation -> Annotation -> Annotation
-combine oldDelta oldann newann =
+combine :: DeltaPos -> AnnKey -> Annotation -> Annotation -> Annotation
+combine oldDelta newkey oldann newann =
   Ann { annEntryDelta = newEntryDelta
       , annPriorComments = annPriorComments oldann ++ annPriorComments newann
       , annFollowingComments = annFollowingComments oldann ++ annFollowingComments newann
@@ -100,7 +100,9 @@ combine oldDelta oldann newann =
     -- Get rid of structural information when replacing, we assume that the
     -- structural information is already there in the new expression.
     removeComma = filter (\(kw, _) -> case kw of
-                                         G GHC.AnnComma -> False
+                                         G GHC.AnnComma
+                                           | AnnKey _ (CN "ArithSeq") <- newkey -> True
+                                           | otherwise -> False
                                          AnnSemiSep -> False
                                          _ -> True)
 
