@@ -36,7 +36,7 @@ import Data.Generics.Schemes
 
 import HsExpr as GHC hiding (Stmt)
 import HsImpExp
-import HsSyn hiding (Pat, Stmt)
+import HsSyn hiding (Pat, Stmt, noExt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
 import qualified OccName as GHC
