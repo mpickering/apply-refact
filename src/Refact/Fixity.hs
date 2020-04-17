@@ -7,9 +7,9 @@ import SrcLoc
 
 import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
-import HsExpr
+import GHC.Hs.Expr
 import RdrName
-import HsExtension hiding (noExt)
+import GHC.Hs.Extension hiding (noExt)
 import OccName
 import Data.Generics hiding (Fixity)
 import Data.Maybe

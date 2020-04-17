@@ -24,6 +24,8 @@ import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
 import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
 import qualified GHC as GHC (setSessionDynFlags, ParsedSource)
+import Outputable hiding ((<>))
+import qualified ErrUtils as GHC (ErrorMessages, pprErrMsgBagWithLoc)
 
 import Options.Applicative
 import Data.Maybe
@@ -189,7 +191,7 @@ filterFilename = do
 
 -- Pipe
 
-parseModuleWithArgs :: [String] -> FilePath -> IO (Either (SrcSpan, String) (Anns, GHC.ParsedSource))
+parseModuleWithArgs :: [String] -> FilePath -> IO (Either GHC.ErrorMessages (Anns, GHC.ParsedSource))
 parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
   dflags1 <- EP.initDynFlags fp
   (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
@@ -202,7 +204,7 @@ runPipe Options{..} file = do
   let verb = optionsVerbosity
   let ghcArgs = map ("-X" ++) optionsLanguage
   when (verb == Loud) (traceM "Parsing module")
-  (as, m) <- either (error . show) (uncurry applyFixities)
+  (as, m) <- either (pprPanic "runPipe" . vcat . GHC.pprErrMsgBagWithLoc) (uncurry applyFixities)
               <$> parseModuleWithArgs ghcArgs file
   when optionsDebug (putStrLn (showAnnData as 0 m))
   rawhints <- getHints optionsRefactFile
