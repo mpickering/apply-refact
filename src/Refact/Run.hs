@@ -97,7 +97,6 @@ data Options = Options
   , optionsVerbosity :: Verbosity
   , optionsStep :: Bool -- ^ Ask before applying each hint
   , optionsDebug :: Bool
-  , optionsRoundtrip :: Bool
   , optionsVersion :: Bool
   , optionsLanguage :: [String]
   , optionsPos     :: Maybe (Int, Int)
@@ -135,10 +134,6 @@ options =
     <*>
     switch (long "debug"
            <> help "Output the GHC AST for debugging"
-           <> internal)
-    <*>
-    switch (long "roundtrip"
-           <> help "Run ghc-exactprint on the file"
            <> internal)
     <*>
     switch (long "version"

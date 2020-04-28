@@ -44,7 +44,6 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsRefactFile    = Just rfile
                   , optionsVerbosity     = Silent
                   , optionsStep          = False
-                  , optionsRoundtrip     = False
                   , optionsDebug         = False
                   , optionsVersion       = False
                   , optionsLanguage      = ["LambdaCase"]

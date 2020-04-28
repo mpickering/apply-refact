@@ -85,9 +85,3 @@ There are also two hidden flags which can be useful for debugging.
 #### `--debug`
 
 Outputs the GHC AST.
-
-#### `--roundtrip`
-
-Performs no refactoring operations on the file but is useful to test whether
-unexpected formatting is due to `ghc-exactprint` or the refactoring.
-
