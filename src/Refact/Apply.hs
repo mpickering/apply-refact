@@ -36,7 +36,7 @@ import Data.Generics.Schemes
 
 import GHC.Hs.Expr as GHC hiding (Stmt)
 import GHC.Hs.ImpExp
-import GHC.Hs hiding (Pat, Stmt, noExt)
+import GHC.Hs hiding (Pat, Stmt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
 import qualified OccName as GHC
@@ -50,8 +50,6 @@ import qualified Data.Map as Map
 import System.IO.Unsafe
 
 import Control.Arrow
-
-import Debug.Trace
 
 import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
@@ -159,7 +157,7 @@ runRefactoring as m r@Replace{}  = do
 runRefactoring as m ModifyComment{..} =
     return (Map.map go as, m)
     where
-      go a@(Ann{ annPriorComments, annsDP }) =
+      go a@Ann{ annPriorComments, annsDP } =
         a { annsDP = map changeComment annsDP
           , annPriorComments = map (first change) annPriorComments }
       changeComment (AnnComment d, dp) = (AnnComment (change d), dp)

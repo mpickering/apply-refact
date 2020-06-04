@@ -1,6 +1,5 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Refact.Run where
 
@@ -23,13 +22,12 @@ import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 import qualified SrcLoc as GHC
 import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
-import qualified GHC as GHC (setSessionDynFlags, ParsedSource)
+import qualified GHC (setSessionDynFlags, ParsedSource)
 import Outputable hiding ((<>))
 import qualified ErrUtils as GHC (ErrorMessages, pprErrMsgBagWithLoc)
 
 import Options.Applicative
 import Data.Maybe
-import Data.Monoid ( (<>) )
 import Control.Monad.Trans.Maybe
 import Data.List hiding (find)
 
@@ -202,42 +200,47 @@ parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
 runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
-  let ghcArgs = map ("-X" ++) optionsLanguage
-  when (verb == Loud) (traceM "Parsing module")
-  (as, m) <- either (pprPanic "runPipe" . vcat . GHC.pprErrMsgBagWithLoc) (uncurry applyFixities)
-              <$> parseModuleWithArgs ghcArgs file
-  when optionsDebug (putStrLn (showAnnData as 0 m))
+      ghcArgs = map ("-X" ++) optionsLanguage
+
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
   let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
-  let noOverlapInp = removeOverlap verb inp
-      refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
-      posFilter (_, rs) =
-        case optionsPos of
-          Nothing -> True
-          Just p  -> any (flip spans p . pos) rs
-      filtRefacts = filter posFilter refacts
+  unless (null inp) $ do
+    when (verb == Loud) (traceM "Parsing module")
+    (as, m) <- either (pprPanic "runPipe" . vcat . GHC.pprErrMsgBagWithLoc) (uncurry applyFixities)
+                <$> parseModuleWithArgs ghcArgs file
+    when optionsDebug (putStrLn (showAnnData as 0 m))
 
+    let noOverlapInp = removeOverlap verb inp
+        allRefacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
 
-  when (verb >= Normal) (traceM $ "Applying " ++ show (length (concatMap snd filtRefacts)) ++ " hints")
-  when (verb == Loud) (traceM $ show filtRefacts)
-  -- need a check here to avoid overlap
-  (ares, res) <- if optionsStep
-                   then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
-                   else return . flip evalState 0 $
-                          foldM (uncurry runRefactoring) (as, m) (concatMap snd filtRefacts)
-  when (optionsDebug) (putStrLn (showAnnData ares 0 res))
-  let output = runIdentity $ exactPrintWithOptions refactOptions res ares
-  if optionsInplace && isJust optionsTarget
-    then writeFile file output
-    else case optionsOutput of
-           Nothing -> putStr output
-           Just f  -> do
-            when (verb == Loud) (traceM $ "Writing result to " ++ f)
-            writeFile f output
+        posFilter (_, rs) =
+          case optionsPos of
+            Nothing -> True
+            Just p  -> any (flip spans p . pos) rs
+        filtRefacts = filter posFilter allRefacts
+        refacts = concatMap snd filtRefacts
+
+    when (verb >= Normal) (traceM $ "Applying " ++ show (length refacts) ++ " hints")
+    when (verb == Loud) (traceM $ show filtRefacts)
+
+    -- need a check here to avoid overlap
+    (ares, res) <- if optionsStep
+                    then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
+                    else return . flip evalState 0 $
+                            foldM (uncurry runRefactoring) (as, m) refacts
+    when optionsDebug (putStrLn (showAnnData ares 0 res))
+    let output = runIdentity $ exactPrintWithOptions refactOptions res ares
+    if optionsInplace && isJust optionsTarget
+      then writeFile file output
+      else case optionsOutput of
+            Nothing -> putStr output
+            Just f  -> do
+              when (verb == Loud) (traceM $ "Writing result to " ++ f)
+              writeFile f output
 
 data LoopOption = LoopOption
                     { desc :: String
@@ -280,4 +283,3 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
 getHints :: Maybe FilePath -> IO String
 getHints (Just hintFile) = readFile hintFile
 getHints Nothing = getContents
-

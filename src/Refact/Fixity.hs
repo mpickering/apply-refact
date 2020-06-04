@@ -9,7 +9,7 @@ import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
 import GHC.Hs.Expr
 import RdrName
-import GHC.Hs.Extension hiding (noExt)
+import GHC.Hs.Extension
 import OccName
 import Data.Generics hiding (Fixity)
 import Data.Maybe
@@ -91,7 +91,7 @@ mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
 
 ---------------------------
 --      e1 `op` - neg_arg
-mkOpAppRn _ loc e1 op1 fix1 e2@(L _ (NegApp {}))     -- NegApp can occur on the right
+mkOpAppRn _ loc e1 op1 fix1 e2@(L _ NegApp{})     -- NegApp can occur on the right
   | not associate_right                 -- We *want* right association
   = return $ L loc (OpApp noExt e1 op1 e2)
   where
