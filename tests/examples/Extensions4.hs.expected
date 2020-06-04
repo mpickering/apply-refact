@@ -1,2 +1,2 @@
-{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE TemplateHaskell #-} 
 $(deriveNewtypes typeInfo)

@@ -208,7 +208,7 @@ runPipe Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
 
-  unless (null inp) $ do
+  output <- if null inp then readFile file else do
     when (verb == Loud) (traceM "Parsing module")
     (as, m) <- either (pprPanic "runPipe" . vcat . GHC.pprErrMsgBagWithLoc) (uncurry applyFixities)
                 <$> parseModuleWithArgs ghcArgs file
@@ -233,14 +233,15 @@ runPipe Options{..} file = do
                     else return . flip evalState 0 $
                             foldM (uncurry runRefactoring) (as, m) refacts
     when optionsDebug (putStrLn (showAnnData ares 0 res))
-    let output = runIdentity $ exactPrintWithOptions refactOptions res ares
-    if optionsInplace && isJust optionsTarget
-      then writeFile file output
-      else case optionsOutput of
-            Nothing -> putStr output
-            Just f  -> do
-              when (verb == Loud) (traceM $ "Writing result to " ++ f)
-              writeFile f output
+    pure . runIdentity $ exactPrintWithOptions refactOptions res ares
+
+  if optionsInplace && isJust optionsTarget
+    then writeFile file output
+    else case optionsOutput of
+          Nothing -> putStr output
+          Just f  -> do
+            when (verb == Loud) (traceM $ "Writing result to " ++ f)
+            writeFile f output
 
 data LoopOption = LoopOption
                     { desc :: String
