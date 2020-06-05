@@ -4,4 +4,4 @@ tests/examples/*.out
 shell.nix
 tags
 dist/
-
+dist-newstyle/
