@@ -30,15 +30,15 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
 
 import Data.Data
-import HsExpr as GHC hiding (Stmt)
+import GHC.Hs.Expr as GHC hiding (Stmt)
 import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
-import qualified HsExtension as GHC
+import qualified GHC.Hs.Extension as GHC
 import qualified ApiAnnotation as GHC
 import qualified FastString    as GHC
 import qualified GHC hiding (parseModule)
-import HsImpExp
+import GHC.Hs.ImpExp
 import Control.Monad.State
 
 import qualified Data.Map as Map

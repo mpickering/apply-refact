@@ -34,13 +34,16 @@ import Control.Monad.Identity
 import Data.Data
 import Data.Generics.Schemes
 
-import HsExpr as GHC hiding (Stmt)
-import HsImpExp
-import HsSyn hiding (Pat, Stmt)
+import GHC.Hs.Expr as GHC hiding (Stmt)
+import GHC.Hs.ImpExp
+import GHC.Hs hiding (Pat, Stmt, noExt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
 import qualified OccName as GHC
 import Data.Generics hiding (GT)
+import Outputable hiding ((<>))
+import ErrUtils
+import Bag
 
 import qualified Data.Map as Map
 
@@ -67,7 +70,7 @@ rigidLayout = deltaOptions RigidLayout
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
 applyRefactorings optionsPos inp file = do
-  (as, m) <- either (error . show) (uncurry applyFixities)
+  (as, m) <- either (pprPanic "apply" . vcat . pprErrMsgBagWithLoc ) (uncurry applyFixities)
               <$> parseModuleWithOptions rigidLayout file
   let noOverlapInp = removeOverlap Silent inp
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
@@ -186,6 +189,8 @@ runRefactoring as m RemoveAsKeyword{..} =
                     | otherwise =  imp
 
 -- Specialised parsers
+mkErr :: GHC.DynFlags -> SrcSpan -> String -> Bag ErrMsg
+mkErr df l s = unitBag (mkPlainErrMsg df l (text s))
 
 
 parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
@@ -198,7 +203,7 @@ parseBind dyn fname s =
   case parseDecl dyn fname s of
     -- Safe as we add no annotations to the ValD
     Right (as, GHC.L l (GHC.ValD _ b)) -> Right (as, GHC.L l b)
-    Right (_, GHC.L l _) -> Left (l, "Not a HsBind")
+    Right (_, GHC.L l _) -> Left (mkErr dyn l "Not a HsBind")
     Left e -> Left e
 parseMatch :: Parser (GHC.LMatch GHC.GhcPs (GHC.LHsExpr GHC.GhcPs))
 parseMatch dyn fname s =
@@ -206,8 +211,8 @@ parseMatch dyn fname s =
     Right (as, GHC.L l GHC.FunBind{fun_matches}) ->
       case unLoc (GHC.mg_alts fun_matches) of
            [x] -> Right (as, x)
-           _   -> Left (l, "Not a single match")
-    Right (_, GHC.L l _) -> Left (l, "Not a funbind")
+           _   -> Left (mkErr dyn l "Not a single match")
+    Right (_, GHC.L l _) -> Left (mkErr dyn l "Not a funbind")
     Left e -> Left e
 
 -- Substitute variables into templates
@@ -332,7 +337,7 @@ replaceWorker as m parser seed Replace{..} =
       p s = unsafePerformIO (withDynFlags (\d -> parser d uniqueName s))
       (relat, template) = case p orig of
                               Right xs -> xs
-                              Left err -> error (show err)
+                              Left err -> pprPanic "replaceWorked" (vcat $ pprErrMsgBagWithLoc err)
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))

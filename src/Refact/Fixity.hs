@@ -7,9 +7,9 @@ import SrcLoc
 
 import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
-import HsExpr
+import GHC.Hs.Expr
 import RdrName
-import HsExtension
+import GHC.Hs.Extension hiding (noExt)
 import OccName
 import Data.Generics hiding (Fixity)
 import Data.Maybe
@@ -162,4 +162,3 @@ infix_  = fixity InfixN
 -- Internal: help function for the above definitions.
 fixity :: FixityDirection -> Int -> [String] -> [(String, Fixity)]
 fixity a p = map (,Fixity (SourceText "") p a)
-
