@@ -1,3 +1,5 @@
+  * #59, do not process the target file if there's no hint
+
 v0.8.0.0
 
   * 8.10 release compatability
