@@ -1,0 +1,1 @@
+[("tests/examples/NegApp.hs:1:15-17: Warning: Redundant bracket\nFound:\n  (3)\nPerhaps:\n  3\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 18}, subts = [("x",SrcSpan {startLine = 1, startCol = 16, endLine = 1, endCol = 17})], orig = "x"}])]

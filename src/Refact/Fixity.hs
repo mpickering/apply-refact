@@ -1,17 +1,17 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
-{-# LANGUAGE RecordWildCards #-}
 module Refact.Fixity (applyFixities) where
 
 import SrcLoc
 
 import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
-import GHC.Hs.Expr
+import GHC.Hs
+import ApiAnnotation
 import RdrName
-import GHC.Hs.Extension
 import OccName
 import Data.Generics hiding (Fixity)
+import Data.List
 import Data.Maybe
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 
@@ -35,12 +35,25 @@ getIdent :: Expr -> String
 getIdent (unLoc -> HsVar _ (L _ n)) = occNameString . rdrNameOcc $ n
 getIdent _ = error "Must be HsVar"
 
+-- | Move the delta position from one annotation to another:
+--
+--  * When rewriting '(e11 `op1` e12) `op2` e2' into 'e11 `op1` (e12 `op2` e2)', move the delta position
+--    from 'e12' to '(e12 `op2` e2)'.
+--  * When rewriting '(- neg_arg) `op` e2' into '- (neg_arg `op` e2)', move the delta position
+--    from 'neg_arg' to '(neg_arg `op` e2)'.
+moveDelta :: Annotation -> AnnKey -> AnnKey -> M ()
+moveDelta oldAnn oldKey newKey = do
+  -- If the old annotation has a unary minus operator, add it to the new annotation.
+  let newAnnsDP | Just dp <- find ((== G AnnMinus) . fst) (annsDP oldAnn) = [dp]
+                | otherwise = []
+  modify . Map.insert newKey $ annNone
+    { annEntryDelta = annEntryDelta oldAnn
+    , annPriorComments = annPriorComments oldAnn
+    , annsDP = newAnnsDP
+    }
 
-moveDelta :: AnnKey -> AnnKey -> M ()
-moveDelta old new = do
-  a@Ann{..} <- gets (fromMaybe annNone . Map.lookup old)
-  modify (Map.insert new (annNone { annEntryDelta = annEntryDelta, annPriorComments = annPriorComments }))
-  modify (Map.insert old (a { annEntryDelta = DP (0,0), annPriorComments = []}))
+  -- If the old key is still there, reset the value.
+  modify $ Map.adjust (\a -> a { annEntryDelta = DP (0,0), annPriorComments = []}) oldKey
 
 ---------------------------
 -- Modified from GHC Renamer
@@ -48,9 +61,9 @@ mkOpAppRn ::
              [(String, Fixity)]
           -> SrcSpan
           -> LHsExpr GhcPs              -- Left operand; already rearrange
-          -> LHsExpr GhcPs -> Fixity            -- Operator and fixity
-          -> LHsExpr GhcPs                      -- Right operand (not an OpApp, but might
-                                                -- be a NegApp)
+          -> LHsExpr GhcPs -> Fixity    -- Operator and fixity
+          -> LHsExpr GhcPs              -- Right operand (not an OpApp, but might
+                                        -- be a NegApp)
           -> M (LHsExpr GhcPs)
 
 -- (e11 `op1` e12) `op2` e2
@@ -59,8 +72,11 @@ mkOpAppRn fs loc e1@(L _ (OpApp x1 e11 op1 e12)) op2 fix2 e2
   = return $ L loc (OpApp noExt e1 op2 e2)
 
   | associate_right = do
+    let oldKey = mkAnnKey e12
+    oldAnn <- gets $ Map.findWithDefault annNone oldKey
     new_e <- mkOpAppRn fs loc' e12 op2 fix2 e2
-    moveDelta (mkAnnKey e12) (mkAnnKey new_e)
+    let newKey = mkAnnKey new_e
+    moveDelta oldAnn oldKey newKey
     return $ L loc (OpApp x1 e11 op1 new_e)
   where
     loc'= combineLocs e12 e2
@@ -75,14 +91,18 @@ mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
 
   | associate_right
   = do
+      let oldKey = mkAnnKey neg_arg
+      oldAnn <- gets $ Map.findWithDefault annNone oldKey
       new_e <- mkOpAppRn fs loc' neg_arg op2 fix2 e2
-      moveDelta (mkAnnKey neg_arg) (mkAnnKey new_e)
+      let newKey = mkAnnKey new_e
+      moveDelta oldAnn oldKey newKey
       let res = L loc (NegApp noExt new_e neg_name)
           key = mkAnnKey res
           ak  = AnnKey loc (CN "OpApp")
       opAnn <- gets (fromMaybe annNone . Map.lookup ak)
       negAnns <- gets (fromMaybe annNone . Map.lookup (mkAnnKey e1))
       modify (Map.insert key (annNone { annEntryDelta = annEntryDelta opAnn, annsDP = annsDP negAnns }))
+      modify (Map.delete (mkAnnKey e1))
       return res
 
   where
