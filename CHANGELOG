@@ -1,3 +1,5 @@
+  * #61, fix a bug where "x < -2 * 3" is printed as "x < 2 * 3"
+  * #51, fix a bug where [1,2..5] is printed as [12..5]
   * #59, do not process the target file if there's no hint
 
 v0.8.0.0
