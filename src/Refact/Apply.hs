@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -24,6 +25,7 @@ import Language.Haskell.GHC.ExactPrint.Print
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
 
+import Data.Char
 import Data.Maybe
 import Data.List hiding (find)
 import Data.Ord
@@ -39,7 +41,8 @@ import GHC.Hs.ImpExp
 import GHC.Hs hiding (Pat, Stmt)
 import SrcLoc
 import qualified GHC hiding (parseModule)
-import qualified OccName as GHC
+import qualified Name as GHC
+import qualified RdrName as GHC
 import Data.Generics hiding (GT)
 import Outputable hiding ((<>))
 import ErrUtils
@@ -337,10 +340,38 @@ replaceWorker as m parser seed Replace{..} =
                               Right xs -> xs
                               Left err -> pprPanic "replaceWorked" (vcat $ pprErrMsgBagWithLoc err)
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
+      lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
+      adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
+      adjacent _ _ = False
+
+      -- Ensure that there is a space between two alphanumeric names, otherwise
+      -- 'y = f(x)' would be refactored into 'y = fx'.
+      ensureSpace :: Anns -> Anns
+      ensureSpace = fromMaybe id $ do
+        (L _ (HsVar _ (L _ newName))) :: LHsExpr GhcPs <- cast newExpr
+        hd <- listToMaybe $ case newName of
+          GHC.Unqual occName -> GHC.occNameString occName
+          GHC.Qual moduleName _ -> GHC.moduleNameString moduleName
+          GHC.Orig modu _ -> GHC.moduleNameString (GHC.moduleName modu)
+          GHC.Exact name -> GHC.occNameString (GHC.nameOccName name)
+        guard $ isAlphaNum hd
+        let prev :: [LHsExpr GhcPs] =
+              listify
+                (\case
+                   (L loc (HsVar _ (L _ rdr))) -> maybe False isAlphaNum (lst rdr) && adjacent loc pos
+                   _ -> False
+                )
+                m
+        guard . not . null $ prev
+        pure . flip Map.adjust (mkAnnKey newExpr) $ \ann ->
+          if annEntryDelta ann == DP (0, 0)
+            then ann { annEntryDelta = DP (0, 1) }
+            else ann
+
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))
    in case runState (transformation m) (newAnns, False) of
-        (finalM, (finalAs, True)) -> (finalAs, finalM)
+        (finalM, (finalAs, True)) -> (ensureSpace finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
         _ -> (as, m)
 replaceWorker as m _ _ _  = (as, m)
