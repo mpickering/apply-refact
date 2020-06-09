@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables  #-}
@@ -30,15 +31,22 @@ import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
 
 import Data.Data
-import GHC.Hs.Expr as GHC hiding (Stmt)
+
 import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
-import qualified GHC.Hs.Extension as GHC
 import qualified ApiAnnotation as GHC
 import qualified FastString    as GHC
 import qualified GHC hiding (parseModule)
+
+#if __GLASGOW_HASKELL__ >= 810
+import GHC.Hs.Expr as GHC hiding (Stmt)
 import GHC.Hs.ImpExp
+#else
+import HsExpr as GHC hiding (Stmt)
+import HsImpExp
+#endif
+
 import Control.Monad.State
 
 import qualified Data.Map as Map
