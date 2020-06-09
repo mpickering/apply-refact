@@ -344,8 +344,10 @@ replaceWorker as m parser seed Replace{..} =
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
       adjacent _ _ = False
 
-      adjust :: Anns -> Anns
-      adjust = fromMaybe id $ do
+      -- Ensure that there is a space between two alphanumeric names, otherwise
+      -- 'y = f(x)' would be refactored into 'y = fx'.
+      ensureSpace :: Anns -> Anns
+      ensureSpace = fromMaybe id $ do
         (L _ (HsVar _ (L _ newName))) :: LHsExpr GhcPs <- cast newExpr
         hd <- listToMaybe $ case newName of
           GHC.Unqual occName -> GHC.occNameString occName
@@ -363,13 +365,13 @@ replaceWorker as m parser seed Replace{..} =
         guard . not . null $ prev
         pure . flip Map.adjust (mkAnnKey newExpr) $ \ann ->
           if annEntryDelta ann == DP (0, 0)
-            then ann {annEntryDelta = DP (0, 1) }
+            then ann { annEntryDelta = DP (0, 1) }
             else ann
 
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))
    in case runState (transformation m) (newAnns, False) of
-        (finalM, (finalAs, True)) -> (adjust finalAs, finalM)
+        (finalM, (finalAs, True)) -> (ensureSpace finalAs, finalM)
         -- Failed to find a replacment so don't make any changes
         _ -> (as, m)
 replaceWorker as m _ _ _  = (as, m)
