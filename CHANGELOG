@@ -1,3 +1,4 @@
+  * #62, fix a bug where "y = f(x)" is refactored into "y = fx"
   * #61, fix a bug where "x < -2 * 3" is printed as "x < 2 * 3"
   * #51, fix a bug where [1,2..5] is printed as [12..5]
   * #59, do not process the target file if there's no hint
