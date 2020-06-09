@@ -253,9 +253,7 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
         putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
         -- In case that the input also comes from stdin
         withFile "/dev/tty" ReadMode hGetLine
-     case lookup inp opts of
-          Just opt   -> perform opt
-          Nothing    -> loopHelp
+     maybe loopHelp perform (lookup inp opts)
   where
     opts =
       [ ("y", LoopOption "Apply current hint" yAction)
