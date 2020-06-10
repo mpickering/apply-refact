@@ -5,3 +5,4 @@ shell.nix
 tags
 dist/
 dist-newstyle/
+hie.yaml
