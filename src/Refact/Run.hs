@@ -42,7 +42,7 @@ import qualified Data.List as List
 import Data.Maybe
 import Data.Version
 import Options.Applicative
-import System.IO
+import System.IO.Extra
 import System.IO.Temp
 import System.FilePath.Find
 import System.Exit
@@ -208,7 +208,7 @@ addExtensionsToFlags
   :: [Extension] -> [Extension] -> FilePath -> DynFlags
   -> IO (Either String DynFlags)
 addExtensionsToFlags es ds fp flags = catchErrors $ do
-    (stringToStringBuffer -> buf) <- readFile fp
+    (stringToStringBuffer -> buf) <- readFileUTF8' fp
     let opts = getOptions flags buf fp
         withExts = flip (foldl' xopt_unset) ds
                       . flip (foldl' xopt_set) es
@@ -241,7 +241,7 @@ runPipe Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
 
-  output <- if null inp then readFile file else do
+  output <- if null inp then readFileUTF8' file else do
     when (verb == Loud) (traceM "Parsing module")
     (as, m) <- either (onError "runPipe") (uncurry applyFixities)
                 <$> parseModuleWithArgs optionsLanguage file
@@ -269,12 +269,12 @@ runPipe Options{..} file = do
     pure . runIdentity $ exactPrintWithOptions refactOptions res ares
 
   if optionsInplace && isJust optionsTarget
-    then writeFile file output
+    then writeFileUTF8 file output
     else case optionsOutput of
           Nothing -> putStr output
           Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
-            writeFile f output
+            writeFileUTF8 f output
 
 data LoopOption = LoopOption
                     { desc :: String
@@ -313,5 +313,5 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
 
 
 getHints :: Maybe FilePath -> IO String
-getHints (Just hintFile) = readFile hintFile
+getHints (Just hintFile) = readFileUTF8' hintFile
 getHints Nothing = getContents
