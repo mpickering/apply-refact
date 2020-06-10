@@ -2,6 +2,7 @@
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
@@ -15,17 +16,21 @@ import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
   )
 import Language.Haskell.GHC.ExactPrint.Utils
 
-
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
 
-import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
+import DynFlags
+import HeaderInfo (getOptions)
+import HscTypes (handleSourceError)
 import qualified GHC (setSessionDynFlags, ParsedSource)
+import Panic (handleGhcException)
 import qualified SrcLoc as GHC
 import SrcLoc
+import StringBuffer (stringToStringBuffer)
+import GHC.LanguageExtensions.Type (Extension(..))
 
 import Control.Monad
 import Control.Monad.State
@@ -33,6 +38,7 @@ import Control.Monad.Identity
 import Control.Monad.Trans.Maybe
 import Data.Char
 import Data.List hiding (find)
+import qualified Data.List as List
 import Data.Maybe
 import Data.Version
 import Options.Applicative
@@ -183,21 +189,52 @@ filterFilename = do
       | "Setup.hs" `isInfixOf` x = False
       | otherwise                 = True
 
--- Pipe
+-- | Parse the input into a list of enabled extensions and a list of disabled extensions.
+parseExtensions :: [String] -> ([Extension], [Extension])
+parseExtensions = foldl' f ([], [])
+  where
+    f :: ([Extension], [Extension]) -> String -> ([Extension], [Extension])
+    f (ys, ns) ('N' : 'o' : s) | Just ext <- readExtension s =
+      (delete ext ys, ext : delete ext ns)
+    f (ys, ns) s | Just ext <- readExtension s =
+      (ext : delete ext ys, delete ext ns)
+    -- ignore unknown extensions
+    f (ys, ns) _ = (ys, ns)
+
+    readExtension :: String -> Maybe Extension
+    readExtension s = flagSpecFlag <$> List.find ((== s) . flagSpecName) xFlags
+
+addExtensionsToFlags
+  :: [Extension] -> [Extension] -> FilePath -> DynFlags
+  -> IO (Either String DynFlags)
+addExtensionsToFlags es ds fp flags = catchErrors $ do
+    (stringToStringBuffer -> buf) <- readFile fp
+    let opts = getOptions flags buf fp
+        withExts = flip (foldl' xopt_unset) ds
+                      . flip (foldl' xopt_set) es
+                      $ flags
+    (withPragmas, _, _) <- parseDynamicFilePragma withExts opts
+    pure . Right $ withPragmas `gopt_set` Opt_KeepRawTokenStream
+  where
+    catchErrors = handleGhcException (pure . Left . show)
+                . handleSourceError (pure . Left . show)
 
 parseModuleWithArgs :: [String] -> FilePath -> IO (Either Errors (Anns, GHC.ParsedSource))
-parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
-  dflags1 <- EP.initDynFlags fp
-  (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
-  _ <- GHC.setSessionDynFlags dflags2
-  res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions dflags2 fp
-  return $ EP.postParseTransform res rigidLayout
+parseModuleWithArgs exts fp = EP.ghcWrapper $ do
+  let (es, ds) = parseExtensions exts
+  initFlags <- EP.initDynFlags fp
+  eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
+  case eflags of
+    -- TODO: report error properly.
+    Left err -> pure . Left $ mkErr initFlags (UnhelpfulSpan mempty) err
+    Right flags -> do
+      _ <- GHC.setSessionDynFlags flags
+      res <- EP.parseModuleApiAnnsWithCppInternal EP.defaultCppOptions flags fp
+      return $ EP.postParseTransform res rigidLayout
 
 runPipe :: Options -> FilePath  -> IO ()
 runPipe Options{..} file = do
   let verb = optionsVerbosity
-      ghcArgs = map ("-X" ++) optionsLanguage
-
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
   let inp :: [(String, [Refactoring R.SrcSpan])] = read rawhints
@@ -207,7 +244,7 @@ runPipe Options{..} file = do
   output <- if null inp then readFile file else do
     when (verb == Loud) (traceM "Parsing module")
     (as, m) <- either (onError "runPipe") (uncurry applyFixities)
-                <$> parseModuleWithArgs ghcArgs file
+                <$> parseModuleWithArgs optionsLanguage file
     when optionsDebug (putStrLn (showAnnData as 0 m))
 
     let noOverlapInp = removeOverlap verb inp
