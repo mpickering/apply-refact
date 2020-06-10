@@ -1,3 +1,5 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -15,6 +17,8 @@ module Refact.Apply
   , rigidLayout
   , removeOverlap
   , refactOptions
+  , type Errors
+  , onError
   )  where
 
 import Language.Haskell.GHC.ExactPrint
@@ -25,40 +29,57 @@ import Language.Haskell.GHC.ExactPrint.Print
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
 
+import Control.Arrow
+import Control.Monad
+import Control.Monad.State
+import Control.Monad.Identity
 import Data.Char
+import Data.Data
+import Data.Generics.Schemes
 import Data.Maybe
 import Data.List hiding (find)
 import Data.Ord
 
-import Control.Monad
-import Control.Monad.State
-import Control.Monad.Identity
-import Data.Data
-import Data.Generics.Schemes
-
+#if __GLASGOW_HASKELL__ >= 810
 import GHC.Hs.Expr as GHC hiding (Stmt)
 import GHC.Hs.ImpExp
 import GHC.Hs hiding (Pat, Stmt)
+import Outputable hiding ((<>))
+import ErrUtils
+import Bag
+#else
+import HsExpr as GHC hiding (Stmt)
+import HsImpExp
+import HsSyn hiding (Pat, Stmt, noExt)
+import Debug.Trace
+#endif
+
 import SrcLoc
 import qualified GHC hiding (parseModule)
 import qualified Name as GHC
 import qualified RdrName as GHC
 import Data.Generics hiding (GT)
-import Outputable hiding ((<>))
-import ErrUtils
-import Bag
 
 import qualified Data.Map as Map
 
 import System.IO.Unsafe
 
-import Control.Arrow
 
 import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
+
+#if __GLASGOW_HASKELL__ >= 810
+type Errors = ErrorMessages
+onError :: String -> Errors -> a
+onError s = pprPanic s . vcat . pprErrMsgBagWithLoc
+#else
+type Errors = (SrcSpan, String)
+onError :: String -> Errors -> a
+onError _ = error . show
+#endif
 
 -- library access to perform the substitutions
 
@@ -71,7 +92,7 @@ rigidLayout = deltaOptions RigidLayout
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
 applyRefactorings optionsPos inp file = do
-  (as, m) <- either (pprPanic "apply" . vcat . pprErrMsgBagWithLoc ) (uncurry applyFixities)
+  (as, m) <- either (onError "apply") (uncurry applyFixities)
               <$> parseModuleWithOptions rigidLayout file
   let noOverlapInp = removeOverlap Silent inp
       refacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
@@ -190,9 +211,12 @@ runRefactoring as m RemoveAsKeyword{..} =
                     | otherwise =  imp
 
 -- Specialised parsers
-mkErr :: GHC.DynFlags -> SrcSpan -> String -> Bag ErrMsg
+mkErr :: GHC.DynFlags -> SrcSpan -> String -> Errors
+#if __GLASGOW_HASKELL__ >= 810
 mkErr df l s = unitBag (mkPlainErrMsg df l (text s))
-
+#else
+mkErr = const (,)
+#endif
 
 parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
 parseModuleName ss _ _ s =
@@ -338,7 +362,8 @@ replaceWorker as m parser seed Replace{..} =
       p s = unsafePerformIO (withDynFlags (\d -> parser d uniqueName s))
       (relat, template) = case p orig of
                               Right xs -> xs
-                              Left err -> pprPanic "replaceWorked" (vcat $ pprErrMsgBagWithLoc err)
+                              Left err -> onError "replaceWorked" err
+
       (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
       lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2

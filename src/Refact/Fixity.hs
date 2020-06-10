@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 module Refact.Fixity (applyFixities) where
@@ -6,7 +7,14 @@ import SrcLoc
 
 import Refact.Utils
 import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
+
+#if __GLASGOW_HASKELL__ >= 810
 import GHC.Hs
+#else
+import HsExpr
+import HsExtension hiding (noExt)
+#endif
+
 import ApiAnnotation
 import RdrName
 import OccName

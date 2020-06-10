@@ -1,5 +1,6 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 module Refact.Run where
 
@@ -20,35 +21,31 @@ import Refact.Types hiding (SrcSpan)
 import Refact.Apply
 import Refact.Fixity
 import Refact.Utils (toGhcSrcSpan, Module)
-import qualified SrcLoc as GHC
+
 import qualified DynFlags as GHC (parseDynamicFlagsCmdLine)
 import qualified GHC (setSessionDynFlags, ParsedSource)
-import Outputable hiding ((<>))
-import qualified ErrUtils as GHC (ErrorMessages, pprErrMsgBagWithLoc)
+import qualified SrcLoc as GHC
+import SrcLoc
 
-import Options.Applicative
-import Data.Maybe
+import Control.Monad
+import Control.Monad.State
+import Control.Monad.Identity
 import Control.Monad.Trans.Maybe
+import Data.Char
 import Data.List hiding (find)
-
+import Data.Maybe
+import Data.Version
+import Options.Applicative
 import System.IO
 import System.IO.Temp
 import System.FilePath.Find
 import System.Exit
 import qualified System.PosixCompat.Files as F
-
-import Control.Monad
-import Control.Monad.State
-import Control.Monad.Identity
+import Text.Read
 
 import Paths_apply_refact
-import Data.Version
 
 import Debug.Trace
-
-import SrcLoc
-import Text.Read
-import Data.Char
 
 refactMain :: IO ()
 refactMain = do
@@ -186,10 +183,9 @@ filterFilename = do
       | "Setup.hs" `isInfixOf` x = False
       | otherwise                 = True
 
-
 -- Pipe
 
-parseModuleWithArgs :: [String] -> FilePath -> IO (Either GHC.ErrorMessages (Anns, GHC.ParsedSource))
+parseModuleWithArgs :: [String] -> FilePath -> IO (Either Errors (Anns, GHC.ParsedSource))
 parseModuleWithArgs ghcArgs fp = EP.ghcWrapper $ do
   dflags1 <- EP.initDynFlags fp
   (dflags2, _, _) <- GHC.parseDynamicFlagsCmdLine dflags1 (map GHC.noLoc ghcArgs)
@@ -210,7 +206,7 @@ runPipe Options{..} file = do
 
   output <- if null inp then readFile file else do
     when (verb == Loud) (traceM "Parsing module")
-    (as, m) <- either (pprPanic "runPipe" . vcat . GHC.pprErrMsgBagWithLoc) (uncurry applyFixities)
+    (as, m) <- either (onError "runPipe") (uncurry applyFixities)
                 <$> parseModuleWithArgs ghcArgs file
     when optionsDebug (putStrLn (showAnnData as 0 m))
 
@@ -257,9 +253,7 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
         putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
         -- In case that the input also comes from stdin
         withFile "/dev/tty" ReadMode hGetLine
-     case lookup inp opts of
-          Just opt   -> perform opt
-          Nothing    -> loopHelp
+     maybe loopHelp perform (lookup inp opts)
   where
     opts =
       [ ("y", LoopOption "Apply current hint" yAction)
