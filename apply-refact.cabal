@@ -61,12 +61,13 @@ executable refactor
                , refact >= 0.2
                , ghc-exactprint >= 0.6.3
                , ghc >= 8.8
+               , ghc-boot-th >= 8.8
                , containers
                , syb
                , mtl
                , process
                , directory
-               , optparse-applicative >= 0.13
+               , optparse-applicative >= 0.15.1.0
                , filemanip
                , unix-compat
                , filepath
@@ -94,6 +95,7 @@ Test-Suite test
                , refact >= 0.2
                , ghc-exactprint >= 0.6.3
                , ghc >= 8.8
+               , ghc-boot-th >= 8.8
                , containers
                , syb
                , mtl

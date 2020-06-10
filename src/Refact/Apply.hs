@@ -19,6 +19,7 @@ module Refact.Apply
   , refactOptions
   , type Errors
   , onError
+  , mkErr
   )  where
 
 import Language.Haskell.GHC.ExactPrint
