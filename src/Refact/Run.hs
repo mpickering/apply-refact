@@ -1,7 +1,9 @@
-{-# LANGUAGE CPP #-}
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StrictData #-}
 {-# LANGUAGE ViewPatterns #-}
 module Refact.Run where
 
@@ -72,19 +74,18 @@ refactMain = do
 
 
 parseVerbosity :: Monad m => String -> m Verbosity
-parseVerbosity s =
-  return $ case s of
-             "0" -> Silent
-             "1" -> Normal
-             "2" -> Loud
-             _   -> Normal
+parseVerbosity = pure . \case
+  "0" -> Silent
+  "1" -> Normal
+  "2" -> Loud
+  _   -> Normal
 
 parsePos :: MonadFail m => String -> m (Int, Int)
 parsePos s =
   case span isDigit s of
     (line, ',':col) ->
       case (,) <$> readMaybe line <*> readMaybe col of
-        Just l -> return l
+        Just l -> pure l
         Nothing -> fail "Invalid input"
     _ -> fail "Invalid input"
 
@@ -105,67 +106,69 @@ data Options = Options
   }
 
 options :: Parser Options
-options =
-  Options <$>
-    optional (argument str (metavar "TARGET"))
-    <*>
-    option (Just <$> str)
-      (long "refact-file"
-      <> value Nothing
-      <> help "A file which specifies which refactorings to perform")
-
-    <*>
-    switch (long "inplace"
-           <> short 'i'
-           <> help "Whether to overwrite the target inplace")
-    <*>
-    optional (strOption (long "output"
-                        <> short 'o'
-                        <> help "Name of the file to output to"
-                        <> metavar "FILE"))
-    <*>
-    option (str >>= parseVerbosity)
-           ( long "verbosity"
-           <> short 'v'
-           <> value Normal
-           <> help "Specify verbosity, 0, 1 or 2. The default is 1 and 0 is silent.")
-    <*>
-    switch (short 's'
-           <> long "step"
-           <> help "Ask before applying each refactoring")
-    <*>
-    switch (long "debug"
-           <> help "Output the GHC AST for debugging"
-           <> internal)
-    <*>
-    switch (long "roundtrip"
-           <> help "Run ghc-exactprint on the file"
-           <> internal)
-    <*>
-    switch (long "version"
-           <> help "Display version number")
-    <*>
-    many (strOption (long "language"
-                    <> short 'X'
-                    <> help "Language extensions (e.g. LambdaCase, RankNTypes)"
-                    <> metavar "Extensions"))
-    <*>
-    option (Just <$> (str >>= parsePos))
-           (long "pos"
-           <> value Nothing
-           <> metavar "<line>,<col>"
-           <> help "Apply hints relevant to a specific position")
-
+options = do
+  optionsTarget <- optional (argument str (metavar "TARGET"))
+  optionsRefactFile <- option (Just <$> str) $ mconcat
+    [ long "refact-file"
+    , value Nothing
+    , help "A file which specifies which refactorings to perform"
+    ]
+  optionsInplace <- switch $ mconcat
+    [ long "inplace"
+    , short 'i'
+    , help "Whether to overwrite the target inplace"
+    ]
+  optionsOutput <- optional . strOption $ mconcat
+    [ long "output"
+    , short 'o'
+    , help "Name of the file to output to"
+    , metavar "FILE"
+    ]
+  optionsVerbosity <- option (str >>= parseVerbosity) $ mconcat
+    [ long "verbosity"
+    , short 'v'
+    , value Normal
+    , help "Specify verbosity, 0, 1 or 2. The default is 1 and 0 is silent."
+    ]
+  optionsStep <- switch $ mconcat
+    [ short 's'
+    , long "step"
+    , help "Ask before applying each refactoring"
+    ]
+  optionsDebug <- switch $ mconcat
+    [ long "debug"
+    , help "Output the GHC AST for debugging"
+    , internal
+    ]
+  optionsRoundtrip <- switch $ mconcat
+    [ long "roundtrip"
+    , help "Run ghc-exactprint on the file"
+    , internal
+    ]
+  optionsVersion <- switch $ mconcat
+    [ long "version"
+    , help "Display version number"
+    ]
+  optionsLanguage <- many . strOption $ mconcat
+    [ long "language"
+    , short 'X'
+    , help "Language extensions (e.g. LambdaCase, RankNTypes)"
+    , metavar "Extensions"
+    ]
+  optionsPos <- option (Just <$> (str >>= parsePos)) $ mconcat
+    [ long "pos"
+    , value Nothing
+    , metavar "<line>,<col>"
+    , help "Apply hints relevant to a specific position"
+    ]
+  pure Options{..}
 
 optionsWithHelp :: ParserInfo Options
-optionsWithHelp
-  =
-    info (helper <*> options)
-          ( fullDesc
-          <> progDesc "Automatically perform refactorings on haskell source files"
-          <> header "refactor" )
-
-
+optionsWithHelp = info (helper <*> options) $ mconcat
+  [ fullDesc
+  , progDesc "Automatically perform refactorings on haskell source files"
+  , header "refactor"
+  ]
 
 -- Given base directory finds all haskell source files
 findHsFiles :: FilePath -> IO [FilePath]
@@ -183,7 +186,7 @@ filterFilename :: FindClause Bool
 filterFilename = do
   ext <- extension
   fname <- fileName
-  return (ext == ".hs" && p fname)
+  pure (ext == ".hs" && p fname)
   where
     p x
       | "Setup.hs" `isInfixOf` x = False
@@ -282,7 +285,7 @@ data LoopOption = LoopOption
 
 refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
                 -> MaybeT IO (Anns, Module)
-refactoringLoop as m [] = return (as, m)
+refactoringLoop as m [] = pure (as, m)
 refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
 refactoringLoop as m hints@((hintDesc, rs): rss) =
   do inp <- liftIO $ do
