@@ -34,7 +34,8 @@ library
                , refact >= 0.2
                , ghc-exactprint >= 0.6.3
                , ghc >= 8.8
-               , containers
+               , containers >= 0.6.2.1
+               , extra >= 1.7.3
                , syb
                , mtl
                , process
@@ -62,7 +63,8 @@ executable refactor
                , ghc-exactprint >= 0.6.3
                , ghc >= 8.8
                , ghc-boot-th >= 8.8
-               , containers
+               , containers >= 0.6.2.1
+               , extra >= 1.7.3
                , syb
                , mtl
                , process
@@ -96,7 +98,8 @@ Test-Suite test
                , ghc-exactprint >= 0.6.3
                , ghc >= 8.8
                , ghc-boot-th >= 8.8
-               , containers
+               , containers >= 0.6.2.1
+               , extra >= 1.7.3
                , syb
                , mtl
                , process
