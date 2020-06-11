@@ -19,7 +19,7 @@ import Test.Tasty.ExpectedFailure
 
 
 main =
-  defaultMain =<< mkTests <$> findTests
+  defaultMain . mkTests =<< findTests
 
 testDir = "tests/examples"
 
@@ -55,6 +55,3 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
           diffCmd = \ref new -> ["diff", "-u", ref, new]
           testFn  = if fp `elem` expectedFailures then expectFail else id
       in testFn $ goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
-
-
-
