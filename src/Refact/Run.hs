@@ -45,7 +45,6 @@ import Data.Maybe
 import Data.Version
 import Options.Applicative
 import System.IO.Extra
-import System.IO.Temp
 import System.FilePath.Find
 import System.Exit
 import qualified System.PosixCompat.Files as F
@@ -63,9 +62,9 @@ refactMain = do
     (error "Must specify either the target file or the refact file")
   case optionsTarget of
     Nothing ->
-      withSystemTempFile "stdin"  (\fp hin -> do
-        getContents >>= hPutStrLn hin >> hClose hin
-        runPipe o fp)
+      withTempFile $ \fp -> do
+        getContents >>= writeFileUTF8 fp
+        runPipe o fp
     Just target -> do
       targetStatus <- F.getFileStatus target
       if F.isDirectory targetStatus

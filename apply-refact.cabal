@@ -12,7 +12,7 @@ maintainer:          matthewtpickering@gmail.com
 -- copyright:
 category:            Development
 build-type:          Simple
-extra-source-files: CHANGELOG
+extra-source-files:  CHANGELOG
                    , README.md
                    , tests/examples/*.hs
                    , tests/examples/*.hs.refact
@@ -40,7 +40,6 @@ library
                , mtl
                , process
                , transformers
-               , temporary
                , filemanip
                , unix-compat
                , directory
@@ -73,7 +72,6 @@ executable refactor
                , filemanip
                , unix-compat
                , filepath
-               , temporary
                , transformers
 
 Test-Suite test
@@ -109,5 +107,4 @@ Test-Suite test
                , unix-compat
                , filepath
                , silently
-               , temporary
                , transformers
