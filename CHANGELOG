@@ -1,3 +1,5 @@
+v0.8.1.0
+
   * #68, support GHC 8.6
   * #63, support GHC 8.8
   * #64, add LANGUAGE pragmas to DynFlag
