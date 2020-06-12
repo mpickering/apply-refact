@@ -23,9 +23,6 @@ main =
 
 testDir = "tests/examples"
 
-expectedFailures :: [FilePath]
-expectedFailures = map (testDir </>) ["Uncurry.hs"]
-
 findTests :: IO [FilePath]
 findTests = findByExtension [".hs"] testDir
 
@@ -53,5 +50,4 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
           action =
             hSilence [stderr] $ runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]
-          testFn  = if fp `elem` expectedFailures then expectFail else id
-      in testFn $ goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
+      in goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
