@@ -1,1 +1,1 @@
-fun x y = f g
+fun x y z = f g z

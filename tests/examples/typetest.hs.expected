@@ -5,10 +5,11 @@ foo
 
 foo a b = ab
   where
-    (x : xs)
-      | baz = qux
-      | qux = faux
-      | otherwise = vrai
+    (x:xs) = if baz
+                then qux
+                else if qux
+                  then faux
+                  else vrai
 
 p1
   | g1 = e1
@@ -18,18 +19,18 @@ p1
 
 foo = qux (f . b . c)
 
-foo = qux (e)
+foo = qux (\xs -> e xs)
 
-foo = qux ((+ b))
+foo = qux (+ b)
 
 foo = qux (flip f)
 
 foo = qux (f . b)
 
-foo = qux (f)
+foo = qux (\x -> f x)
 
 foo = qux (f . b)
 
-foo = qux ((+))
+foo = qux (\x -> (x +))
 
 

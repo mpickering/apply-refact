@@ -1,1 +1,1 @@
-[("tests/examples/Pragma0.hs:1:1: Error: Use better pragmas\nFound:\n  {-# OPTIONS_GHC -cpp  #-}\nWhy not:\n  {-# LANGUAGE CPP #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 25}, newComment = "{-# LANGUAGE CPP #-}"}])]
+[("tests/examples/Pragma0.hs:1:1-24: Warning: Use LANGUAGE pragmas\nFound:\n  {-# OPTIONS_GHC -cpp #-}\nPerhaps:\n  {-# LANGUAGE CPP #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 25}, newComment = "{-# LANGUAGE CPP #-}"}])]

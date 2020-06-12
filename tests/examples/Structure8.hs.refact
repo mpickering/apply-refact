@@ -1,1 +1,1 @@
-[("tests/examples/Structure8.hs:1:1: Warning: Redundant guard\nFound:\n  foo x | otherwise = y\nWhy not:\n  foo x = y\n",[Delete {rtype = Stmt, pos = SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 18}}])]
+[("tests/examples/Structure8.hs:1:1-21: Suggestion: Redundant guard\nFound:\n  foo x | otherwise = y\nPerhaps:\n  foo x = y\n",[Delete {rtype = Stmt, pos = SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 18}}])]

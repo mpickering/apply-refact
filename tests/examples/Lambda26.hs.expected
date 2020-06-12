@@ -1,1 +1,1 @@
-yes = a where
+yes = \x -> a x where

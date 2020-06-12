@@ -1,2 +1,2 @@
-{-# LANGUAGE DeriveFunctor #-} 
+{-# LANGUAGE DeriveFunctor #-}
 data Foo = Foo Int deriving Functor

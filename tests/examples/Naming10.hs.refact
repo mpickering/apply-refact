@@ -1,1 +1,1 @@
-[("tests/examples/Naming10.hs:1:1: Warning: Use camelCase\nFound:\n  data Yes = FOO_A\n           | Foo_B\nWhy not:\n  data Yes = FOO_A\n           | FooB\n",[])]
+[("tests/examples/Naming10.hs:1:1-24: Suggestion: Use camelCase\nFound:\n  data Yes = FOO_A | Foo_B\nPerhaps:\n  data Yes = FOO_A | FooB\n",[])]

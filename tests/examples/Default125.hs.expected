@@ -1,2 +1,2 @@
 import Control.Monad hiding (filterM)
-yes = Control.Monad.forM
+yes = forM

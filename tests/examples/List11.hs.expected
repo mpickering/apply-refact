@@ -1,1 +1,1 @@
-data Yes = Yes (Maybe String)
+data Yes = Yes (Maybe [Char])

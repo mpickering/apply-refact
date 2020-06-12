@@ -1,1 +1,1 @@
-[("tests/examples/Monad14.hs:1:10: Error: Use forM_\nFound:\n  forM files $ \\ x -> return ()\nWhy not:\n  forM_ files $ \\ x -> return ()\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 14}, subts = [], orig = "forM_"}])]
+[("tests/examples/Monad14.hs:1:10-37: Warning: Use forM_\nFound:\n  forM files $ \\ x -> return ()\nPerhaps:\n  forM_ files $ \\ x -> return ()\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 14}, subts = [], orig = "forM_"}])]

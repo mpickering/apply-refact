@@ -1,1 +1,1 @@
-foo :: Int -> Int -> Int
+foo :: Int -> (Int -> Int)

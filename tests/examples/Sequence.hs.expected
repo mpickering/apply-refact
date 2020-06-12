@@ -3,7 +3,7 @@
 -- data structures or a state-transforming monad.
 mapAndUnzipM      :: (Monad m) => (a -> m (b,c)) -> [a] -> m ([b], [c])
 {-# INLINE mapAndUnzipM #-}
-mapAndUnzipM f xs =  Control.Monad.liftM foo (sequence (map f xs))
+mapAndUnzipM f xs =  foo <$> sequence (map f xs)
 
 ren = run (foo) run
 

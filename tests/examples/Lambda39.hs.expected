@@ -1,1 +1,1 @@
-yes = foo (Just)
+yes = foo (\x -> Just x)

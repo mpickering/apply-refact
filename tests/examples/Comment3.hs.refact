@@ -1,1 +1,1 @@
-[("tests/examples/Comment3.hs:1:1: Warning: Use pragma syntax\nFound:\n  {- INLINE[~k] f -}\nWhy not:\n  {-# INLINE[~k] f #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 19}, newComment = "{-# INLINE[~k] f #-}"}])]
+[("tests/examples/Comment3.hs:1:1-18: Suggestion: Use pragma syntax\nFound:\n  {- INLINE[~k] f -}\nPerhaps:\n  {-# INLINE[~k] f #-}\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 19}, newComment = "{-# INLINE[~k] f #-}"}])]

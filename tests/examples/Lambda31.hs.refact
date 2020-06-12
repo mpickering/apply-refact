@@ -1,1 +1,1 @@
-[]
+[("tests/examples/Lambda31.hs:1:27-31: Suggestion: Redundant where\nFound:\n  where\nPerhaps you should remove it.\n",[])]

@@ -1,1 +1,1 @@
-[("tests/examples/Default54.hs:1:7: Error: Evaluate\nFound:\n  id 1\nWhy not:\n  1\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 11}, subts = [("x",SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 11})], orig = "x"}])]
+[("tests/examples/Default54.hs:1:7-10: Warning: Redundant id\nFound:\n  id 1\nPerhaps:\n  1\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 11}, subts = [("x",SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 11})], orig = "x"}])]

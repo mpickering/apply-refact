@@ -1,1 +1,1 @@
-[("tests/examples/Default22.hs:1:12: Error: Use fst\nFound:\n  \\ (a, _) -> a\nWhy not:\n  fst\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 23}, subts = [], orig = "fst"}])]
+[("tests/examples/Default22.hs:1:12-22: Warning: Use fst\nFound:\n  \\ (a, _) -> a\nPerhaps:\n  fst\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 23}, subts = [], orig = "fst"}])]

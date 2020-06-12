@@ -1,1 +1,1 @@
-[("tests/examples/List11.hs:1:17: Warning: Use String\nFound:\n  Maybe [Char]\nWhy not:\n  Maybe String\n",[Replace {rtype = Type, pos = SrcSpan {startLine = 1, startCol = 23, endLine = 1, endCol = 29}, subts = [], orig = "String"}])]
+[("tests/examples/List11.hs:1:1-29: Suggestion: Use newtype instead of data\nFound:\n  data Yes = Yes (Maybe [Char])\nPerhaps:\n  newtype Yes = Yes (Maybe [Char])\nNote: decreases laziness\n",[])]

@@ -1,1 +1,1 @@
-[("tests/examples/Import18.hs:1:1: Warning: Use hierarchical imports\nFound:\n  import Char (foo)\nWhy not:\n  import Data.Char (foo)\n",[Replace {rtype = ModuleName, pos = SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 12}, subts = [], orig = "Data.Char"}])]
+[]

@@ -1,1 +1,1 @@
-[("tests/examples/Naming3.hs:1:1: Warning: Use camelCase\nFound:\n  data Yes = Foo{bar_cap :: Int}\nWhy not:\n  data Yes = Foo{barCap :: Int}\n",[])]
+[("tests/examples/Naming3.hs:1:1-31: Suggestion: Use newtype instead of data\nFound:\n  data Yes = Foo {bar_cap :: Int}\nPerhaps:\n  newtype Yes = Foo {bar_cap :: Int}\nNote: decreases laziness\n",[])]

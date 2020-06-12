@@ -1,1 +1,1 @@
-yes = ftable ++ map (toUpper Control.Arrow.*** urlEncode) ftable
+yes = ftable ++ map (Data.Bifunctor.bimap toUpper urlEncode) ftable

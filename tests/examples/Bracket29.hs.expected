@@ -1,1 +1,1 @@
-yes = return Record{a=b}
+yes = return $ Record{a=b}
