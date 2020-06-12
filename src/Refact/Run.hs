@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
@@ -53,6 +55,10 @@ import Text.Read
 import Paths_apply_refact
 
 import Debug.Trace
+
+#if __GLASGOW_HASKELL__ <= 806
+type MonadFail = Monad
+#endif
 
 refactMain :: IO ()
 refactMain = do
