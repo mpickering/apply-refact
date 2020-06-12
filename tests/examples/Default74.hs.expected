@@ -1,1 +1,1 @@
-main = head $ drop n x
+main = x !! max 0 n

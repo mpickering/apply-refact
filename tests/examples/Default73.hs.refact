@@ -1,1 +1,1 @@
-[("tests/examples/Default73.hs:1:21: Warning: Use const\nFound:\n  \\ _ -> 5\nWhy not:\n  const 5\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 21, endLine = 1, endCol = 26}, subts = [("y",SrcSpan {startLine = 1, startCol = 25, endLine = 1, endCol = 26})], orig = "const y"}])]
+[("tests/examples/Default73.hs:1:21-25: Suggestion: Use const\nFound:\n  \\ _ -> 5\nPerhaps:\n  const 5\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 21, endLine = 1, endCol = 26}, subts = [], orig = "const 5"}])]

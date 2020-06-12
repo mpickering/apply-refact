@@ -1,1 +1,1 @@
-f = foo (\ (x:xs) x -> foo x x)
+f = foo (\ (_ : xs) x -> foo x x)

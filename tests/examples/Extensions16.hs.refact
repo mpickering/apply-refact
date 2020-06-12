@@ -1,1 +1,1 @@
-[("tests/examples/Extensions16.hs:1:1: Error: Unused LANGUAGE pragma\nFound:\n  {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}\nWhy not remove it.\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 64}, newComment = ""}])]
+[("tests/examples/Extensions16.hs:1:1-63: Warning: Unused LANGUAGE pragma\nFound:\n  {-# LANGUAGE GeneralizedNewtypeDeriving, DeriveDataTypeable #-}\nPerhaps you should remove it.\n",[ModifyComment {pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 64}, newComment = ""}])]

@@ -1,1 +1,1 @@
-foo = bar $ const [z,y]
+foo = bar $ const [z, y]

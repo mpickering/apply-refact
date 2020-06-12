@@ -1,1 +1,1 @@
-[("tests/examples/Bracket37.hs:1:31: Error: Redundant bracket\nFound:\n  (2)\nWhy not:\n  2\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 31, endLine = 1, endCol = 34}, subts = [("x",SrcSpan {startLine = 1, startCol = 32, endLine = 1, endCol = 33})], orig = "x"}])]
+[("tests/examples/Bracket37.hs:1:31-33: Warning: Redundant bracket\nFound:\n  (2)\nPerhaps:\n  2\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 31, endLine = 1, endCol = 34}, subts = [("x",SrcSpan {startLine = 1, startCol = 32, endLine = 1, endCol = 33})], orig = "x"}])]

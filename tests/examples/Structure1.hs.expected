@@ -1,4 +1,4 @@
-yes x y
+x `yes` y
   | a = b
   | c = d
   | otherwise = e

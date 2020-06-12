@@ -1,1 +1,1 @@
-[("tests/examples/Test14.hs:1:1: Warning: Use camelCase\nFound:\n  type Ann_Test = Int\nWhy not:\n  type AnnTest = Int\n",[])]
+[("tests/examples/Test14.hs:1:1-19: Suggestion: Use camelCase\nFound:\n  type Ann_Test = Int\nPerhaps:\n  type AnnTest = Int\n",[])]

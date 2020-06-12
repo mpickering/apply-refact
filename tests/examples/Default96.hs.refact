@@ -1,1 +1,1 @@
-[]
+[("tests/examples/Default96.hs:1:1-25: Suggestion: Use newtype instead of data\nFound:\n  data Pair = P {a :: !Int}\nPerhaps:\n  newtype Pair = P {a :: Int}\n",[])]

@@ -1,1 +1,1 @@
-yes = y :: String -> a
+yes = y :: [Char] -> a

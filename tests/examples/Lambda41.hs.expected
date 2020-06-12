@@ -1,1 +1,1 @@
-baz = bar ((+))
+baz = bar (\x -> (x +))

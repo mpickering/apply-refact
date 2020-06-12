@@ -1,1 +1,1 @@
-[("tests/examples/Default89.hs:1:13: Error: Redundant not\nFound:\n  not . not\nWhy not:\n  id\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 13, endLine = 1, endCol = 22}, subts = [], orig = "id"}])]
+[("tests/examples/Default89.hs:1:13-21: Warning: Redundant not\nFound:\n  not . not\nPerhaps:\n  id\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 13, endLine = 1, endCol = 22}, subts = [], orig = "id"}])]

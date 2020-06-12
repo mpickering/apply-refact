@@ -1,1 +1,1 @@
-[("tests/examples/Lambda10.hs:1:9: Warning: Use section\nFound:\n  (flip op x)\nWhy not:\n  (`op` x)\n",[])]
+[("tests/examples/Lambda10.hs:1:9-19: Suggestion: Use section\nFound:\n  (flip op x)\nPerhaps:\n  (`op` x)\n",[])]

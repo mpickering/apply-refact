@@ -1,2 +1,2 @@
-{-# OPTIONS_GHC -main-is Baz #-}
 {-# LANGUAGE GADTs #-}
+{-# OPTIONS_GHC -main-is Baz #-}

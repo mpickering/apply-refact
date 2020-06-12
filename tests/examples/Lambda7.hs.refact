@@ -1,1 +1,1 @@
-[]
+[("tests/examples/Lambda7.hs:1:1-13: Warning: Eta reduce\nFound:\n  fun mr = y mr\nPerhaps:\n  fun = y\n",[])]

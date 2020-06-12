@@ -1,1 +1,1 @@
-[("tests/examples/Default50.hs:1:7: Warning: Use fromMaybe\nFound:\n  case x z of\n      Nothing -> y z\n      Just pat -> pat\nWhy not:\n  fromMaybe (y z) (x z)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 50}, subts = [("x",SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 15}),("y",SrcSpan {startLine = 1, startCol = 30, endLine = 1, endCol = 33})], orig = "fromMaybe (y) (x)"}])]
+[]

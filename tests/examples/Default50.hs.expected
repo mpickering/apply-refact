@@ -1,1 +1,1 @@
-yes = fromMaybe (y z) (x z)
+yes = case x z of Nothing -> y z; Just pat -> pat

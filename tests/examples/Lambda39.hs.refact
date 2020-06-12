@@ -1,1 +1,1 @@
-[("tests/examples/Lambda39.hs:1:12: Error: Avoid lambda\nFound:\n  \\ x -> Just x\nWhy not:\n  Just\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 12, endLine = 1, endCol = 24}, subts = [("x",SrcSpan {startLine = 1, startCol = 18, endLine = 1, endCol = 22})], orig = "x"}])]
+[("tests/examples/Lambda39.hs:1:12-23: Warning: Avoid lambda\nFound:\n  \\ x -> Just x\nPerhaps:\n  Just\n",[])]

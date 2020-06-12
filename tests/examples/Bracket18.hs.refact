@@ -1,1 +1,1 @@
-[("tests/examples/Bracket18.hs:1:8: Warning: Redundant bracket\nFound:\n  Int -> (Int -> Int)\nWhy not:\n  Int -> Int -> Int\n",[Replace {rtype = Type, pos = SrcSpan {startLine = 1, startCol = 15, endLine = 1, endCol = 27}, subts = [("x",SrcSpan {startLine = 1, startCol = 16, endLine = 1, endCol = 26})], orig = "x"}])]
+[]

@@ -1,1 +1,1 @@
-[]
+[("tests/examples/Extensions21.hs:2:1-35: Suggestion: Use newtype instead of data\nFound:\n  data Foo\n    = Foo Int\n    deriving Functor\nPerhaps:\n  newtype Foo\n    = Foo Int\n    deriving Functor\nNote: decreases laziness\n",[])]

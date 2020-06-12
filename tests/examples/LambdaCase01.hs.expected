@@ -2,4 +2,4 @@
 -- If that option is not preserved, parsing here will fail.
 foo = \case
   1 -> id
-  _ -> const 0
+  _ -> (const 0)

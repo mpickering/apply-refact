@@ -1,1 +1,1 @@
-foo (Bar{}) = x
+foo (Bar {}) = x

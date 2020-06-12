@@ -1,1 +1,1 @@
-yes = foo $ Control.Arrow.second ((+) y)
+yes = foo $ Data.Bifunctor.second ((+) y)

@@ -1,1 +1,1 @@
-yes = lines Control.Applicative.<$> abc 123
+yes = lines <$> abc 123

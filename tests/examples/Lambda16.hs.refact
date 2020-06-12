@@ -1,1 +1,1 @@
-[("tests/examples/Lambda16.hs:1:10: Warning: Avoid lambda\nFound:\n  \\ x -> x * y\nWhy not:\n  (* y)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 21}, subts = [], orig = "(* y)"}])]
+[("tests/examples/Lambda16.hs:1:9-21: Suggestion: Avoid lambda using `infix`\nFound:\n  (\\ x -> x * y)\nPerhaps:\n  (* y)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 9, endLine = 1, endCol = 22}, subts = [], orig = "(* y)"}])]

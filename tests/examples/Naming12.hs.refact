@@ -1,1 +1,1 @@
-[("tests/examples/Naming12.hs:1:1: Warning: Use camelCase\nFound:\n  cast_foo = ...\nWhy not:\n  castFoo = ...\n",[])]
+[("tests/examples/Naming12.hs:1:1-12: Suggestion: Use camelCase\nFound:\n  cast_foo = ...\nPerhaps:\n  castFoo = ...\n",[])]

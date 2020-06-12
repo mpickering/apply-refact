@@ -1,2 +1,2 @@
 import qualified Control.Monad as CM(forM,filterM)
-yes = Control.Monad.forM
+yes = CM.forM

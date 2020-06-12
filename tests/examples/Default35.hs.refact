@@ -1,1 +1,1 @@
-[("tests/examples/Default35.hs:1:7: Warning: Use unwords\nFound:\n  concat . intersperse \" \"\nWhy not:\n  unwords\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 31}, subts = [], orig = "unwords"}])]
+[("tests/examples/Default35.hs:1:7-30: Suggestion: Use unwords\nFound:\n  concat . intersperse \" \"\nPerhaps:\n  unwords\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 31}, subts = [], orig = "unwords"}])]

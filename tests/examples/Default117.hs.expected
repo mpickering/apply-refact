@@ -1,2 +1,2 @@
 import Control.Monad
-yes = Control.Monad.forM
+yes = forM
