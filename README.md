@@ -1,14 +1,22 @@
 `apply-refact` applies refactorings specified by the
 [`refact`](https://hackage.haskell.org/package/refact) package. It is currently
-integrated into `hlint` to enable the automatic application of suggestions.
+integrated into [HLint](https://github.com/ndmitchell/hlint) to enable the automatic application of suggestions.
 
-# install
+# Install
 
 ```shell
-stack --resolver=nightly install apply-refact
+cabal install apply-refact
 ```
 
-executable name is `refactor`
+Alternatively, clone the repo and run `cabal install`.
+
+You can also install from Nix:
+
+```shell
+nix-env -iA nixpkgs.haskellPackages.apply-refact
+```
+
+Executable name is `refactor`.
 
 #### Hlint Integration example
 
@@ -91,3 +99,6 @@ Outputs the GHC AST.
 Performs no refactoring operations on the file but is useful to test whether
 unexpected formatting is due to `ghc-exactprint` or the refactoring.
 
+# Contributing
+
+Contributions are welcome. You can run the tests via `cabal test`.
