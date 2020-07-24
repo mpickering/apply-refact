@@ -1,1 +1,1 @@
-[("tests/examples/Lambda7.hs:1:1-13: Warning: Eta reduce\nFound:\n  fun mr = y mr\nPerhaps:\n  fun = y\n",[])]
+[("tests/examples/Lambda7.hs:1:1-13: Warning: Eta reduce\nFound:\n  fun mr = y mr\nPerhaps:\n  fun = y\n",[Replace {rtype = Decl, pos = SrcSpan {startLine = 1, startCol = 1, endLine = 1, endCol = 14}, subts = [("body",SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 11})], orig = "fun = body"}])]

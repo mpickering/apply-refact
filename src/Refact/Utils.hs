@@ -23,6 +23,7 @@ module Refact.Utils ( -- * Synonyms
                     , modifyAnnKey
                     , replaceAnnKey
                     , toGhcSrcSpan
+                    , setSrcSpanFile
                     , findParent
 
                     ) where
@@ -32,6 +33,7 @@ import Language.Haskell.GHC.ExactPrint.Types
 
 import Data.Data
 
+import FastString (FastString)
 import SrcLoc
 import qualified SrcLoc as GHC
 import qualified RdrName as GHC
@@ -172,3 +174,12 @@ toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
 toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
   where
     f = mkSrcLoc (GHC.mkFastString file)
+
+setSrcSpanFile :: FastString -> SrcSpan -> SrcSpan
+setSrcSpanFile file s
+  | RealSrcLoc start <- srcSpanStart s
+  , RealSrcLoc end <- srcSpanEnd s
+  = let start' = mkSrcLoc file (srcLocLine start) (srcLocCol start)
+        end' = mkSrcLoc file (srcLocLine end) (srcLocCol end)
+     in mkSrcSpan start' end'
+setSrcSpanFile _ s = s

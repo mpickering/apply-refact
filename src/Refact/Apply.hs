@@ -7,6 +7,7 @@
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE TypeApplications #-}
 module Refact.Apply
   (
     runRefactoring
@@ -38,7 +39,7 @@ import Data.Char
 import Data.Data
 import Data.Generics.Schemes
 import Data.Maybe
-import Data.List hiding (find)
+import Data.List
 import Data.Ord
 
 #if __GLASGOW_HASKELL__ >= 810
@@ -70,7 +71,7 @@ import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, FunBind
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan)
+                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, setSrcSpanFile)
 
 #if __GLASGOW_HASKELL__ >= 810
 type Errors = ErrorMessages
@@ -88,6 +89,8 @@ composeSrcSpan = id
 
 decomposeSrcSpan :: a -> a
 decomposeSrcSpan = id
+
+type SrcSpanLess a = a
 #endif
 
 -- library access to perform the substitutions
@@ -343,29 +346,136 @@ insertComment k s as =
 
 -- Substitute the template into the original AST.
 #if __GLASGOW_HASKELL__ <= 806
-doGenReplacement :: (Data ast, Data a)
-              => a
-              -> (GHC.Located ast -> Bool)
-              -> GHC.Located ast
-              -> GHC.Located ast
-              -> State (Anns, Bool) (GHC.Located ast)
+doGenReplacement
+  :: forall ast a. (Data ast, Data a)
+  => a
+  -> (GHC.Located ast -> Bool)
+  -> GHC.Located ast
+  -> GHC.Located ast
+  -> State (Anns, Bool) (GHC.Located ast)
 #else
-doGenReplacement :: (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
-              => a
-              -> (ast -> Bool)
-              -> ast
-              -> ast
-              -> State (Anns, Bool) ast
+doGenReplacement
+  :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
+  => a
+  -> (ast -> Bool)
+  -> ast
+  -> ast
+  -> State (Anns, Bool) ast
 #endif
-doGenReplacement m p new old =
-  if p old then do
-                  s <- get
-                  let n = decomposeSrcSpan new
-                      o = decomposeSrcSpan old
-                      (v, st) = runState (modifyAnnKey m o n) (fst s)
-                  modify (const (st, True))
-                  return $ composeSrcSpan v
-           else return old
+doGenReplacement m p new old
+  | p old = do
+      anns <- gets fst
+      let n = decomposeSrcSpan new
+          o = decomposeSrcSpan old
+          newAnns = execState (modifyAnnKey m o n) anns
+      put (newAnns, True)
+      pure new
+  -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
+  -- run the replacement on "f a = body", and add "local" back afterwards.
+  -- This is useful for hints like "Eta reduce" and "Redundant where".
+  | Just Refl <- eqT @(SrcSpanLess ast) @(HsDecl GHC.GhcPs)
+  , L _ (ValD xvald newBind@FunBind{}) <- decomposeSrcSpan new
+  , Just (oldNoLocal, oldLocal) <- stripLocalBind (decomposeSrcSpan old)
+  , newLoc@(RealSrcSpan newLocReal) <- getLoc new
+  , p (composeSrcSpan oldNoLocal) = do
+      anns <- gets fst
+      let n = decomposeSrcSpan new
+          o = decomposeSrcSpan old
+          intAnns = execState (modifyAnnKey m o n) anns
+          newFile = srcSpanFile newLocReal
+          newLocal = everywhere (mkT $ setSrcSpanFile newFile) oldLocal
+          newLocalLoc = getLoc newLocal
+          ensureLoc = combineSrcSpans newLocalLoc
+          newMG = fun_matches newBind
+          L locMG [L locMatch newMatch] = mg_alts newMG
+          newGRHSs = m_grhss newMatch
+          finalLoc = ensureLoc newLoc
+          newWithLocalBinds = setLocalBind newLocal xvald newBind finalLoc
+                                           newMG (ensureLoc locMG) newMatch (ensureLoc locMatch) newGRHSs
+
+          -- Ensure the new Anns properly reflects the local binds we added back.
+          addLocalBindsToAnns = addAnnWhere
+                              . Map.fromList
+                              . map (first (expandTemplateLoc . updateFile . expandGRHSLoc))
+                              . Map.toList
+            where
+              addAnnWhere :: Anns -> Anns
+              addAnnWhere oldAnns =
+                let oldAnns' = Map.toList oldAnns
+                    po = \case
+                      (AnnKey loc@(RealSrcSpan r) con, _) ->
+                        loc == getLoc old && con == CN "Match" && srcSpanFile r /= newFile
+                      _ -> False
+                    pn = \case
+                      (AnnKey loc@(RealSrcSpan r) con, _) ->
+                        loc == finalLoc && con == CN "Match" && srcSpanFile r == newFile
+                      _ -> False
+                in fromMaybe oldAnns $ do
+                      oldAnn <- snd <$> find po oldAnns'
+                      annWhere <- find ((== G GHC.AnnWhere) . fst) (annsDP oldAnn)
+                      newKey <- fst <$> find pn oldAnns'
+                      pure $ Map.adjust (\ann -> ann {annsDP = annsDP ann ++ [annWhere]}) newKey oldAnns
+
+              -- Expand the SrcSpan of the "GRHS" entry in the new file to include the local binds
+              expandGRHSLoc = \case
+                AnnKey loc@(RealSrcSpan r) con
+                  | con == CN "GRHS", srcSpanFile r == newFile -> AnnKey (ensureLoc loc) con
+                other -> other
+
+              -- If an Anns entry corresponds to the local binds, update its file to point to the new file.
+              updateFile = \case
+                AnnKey loc con
+                  | loc `isSubspanOf` getLoc oldLocal -> AnnKey (setSrcSpanFile newFile loc) con
+                other -> other
+
+              -- For each SrcSpan in the new file that is the entire newLoc, set it to finalLoc
+              expandTemplateLoc = \case
+                AnnKey loc con
+                  | loc == newLoc -> AnnKey finalLoc con
+                other -> other
+
+          newAnns = addLocalBindsToAnns intAnns
+      put (newAnns, True)
+      pure $ composeSrcSpan newWithLocalBinds
+  | otherwise = pure old
+
+-- | If the input is a FunBind with a single match, e.g., "foo a = body where x = y"
+-- return "Just (foo a = body, x = y)". Otherwise return Nothing.
+stripLocalBind
+  :: LHsDecl GHC.GhcPs
+  -> Maybe (LHsDecl GHC.GhcPs, LHsLocalBinds GHC.GhcPs)
+stripLocalBind = \case
+  L _ (ValD xvald origBind@FunBind{})
+    | let origMG = fun_matches origBind
+    , L locMG [L locMatch origMatch] <- mg_alts origMG
+    , let origGRHSs = m_grhss origMatch
+    , [L _ (GRHS _ _ (L loc2 _))] <- grhssGRHSs origGRHSs ->
+      let loc1 = getLoc (fun_id origBind)
+          newLoc = combineSrcSpans loc1 loc2
+          withoutLocalBinds = setLocalBind (noLoc (EmptyLocalBinds noExt)) xvald origBind newLoc origMG locMG
+                                           origMatch locMatch origGRHSs
+       in Just (withoutLocalBinds, grhssLocalBinds origGRHSs)
+  _ -> Nothing
+
+-- | Set the local binds in a HsBind.
+setLocalBind
+  :: LHsLocalBinds GHC.GhcPs
+  -> XValD GhcPs
+  -> HsBind GhcPs
+  -> SrcSpan
+  -> MatchGroup GhcPs (LHsExpr GhcPs)
+  -> SrcSpan
+  -> Match GhcPs (LHsExpr GhcPs)
+  -> SrcSpan
+  -> GRHSs GhcPs (LHsExpr GhcPs)
+  -> LHsDecl GhcPs
+setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch origGRHSs =
+    L newLoc (ValD xvald newBind)
+  where
+    newGRHSs = origGRHSs{grhssLocalBinds = newLocalBinds}
+    newMatch = origMatch{m_grhss = newGRHSs}
+    newMG = origMG{mg_alts = L locMG [L locMatch newMatch]}
+    newBind = origBind{fun_matches = newMG}
 
 #if __GLASGOW_HASKELL__ <= 806
 replaceWorker :: (Annotate a, Data mod)
@@ -428,8 +538,6 @@ replaceWorker as m parser seed Replace{..} =
         -- Failed to find a replacment so don't make any changes
         _ -> (as, m)
 replaceWorker as m _ _ _  = (as, m)
-
-
 
 -- Find the largest expression with a given SrcSpan
 findGen :: forall ast a . (Data ast, Data a) => String -> a -> SrcSpan -> GHC.Located ast
