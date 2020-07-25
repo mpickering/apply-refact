@@ -1,3 +1,5 @@
+  * #75, support refactoring for Eta reduce
+
 v0.8.1.0
 
   * #68, support GHC 8.6
