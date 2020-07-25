@@ -1,1 +1,1 @@
-foo a b c = bar (flux ++ quux) c where flux = a
+foo d a = bar (flux ++ quux) where flux = d
