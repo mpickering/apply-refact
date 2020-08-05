@@ -1,16 +1,15 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StrictData #-}
 {-# LANGUAGE ViewPatterns #-}
+
 module Refact.Run where
 
 import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Print
 import qualified Language.Haskell.GHC.ExactPrint.Parsers as EP
   ( defaultCppOptions
   , ghcWrapper
@@ -24,22 +23,19 @@ import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
 import Refact.Apply
 import Refact.Fixity
-import Refact.Utils (toGhcSrcSpan, Module)
+import Refact.Internal (apply)
 
 import DynFlags
 import HeaderInfo (getOptions)
 import HscTypes (handleSourceError)
 import qualified GHC (setSessionDynFlags, ParsedSource)
 import Panic (handleGhcException)
-import qualified SrcLoc as GHC
 import SrcLoc
 import StringBuffer (stringToStringBuffer)
 import GHC.LanguageExtensions.Type (Extension(..))
 
 import Control.Monad
-import Control.Monad.State
-import Control.Monad.Identity
-import Control.Monad.Trans.Maybe
+import Control.Monad.IO.Class (MonadIO(..))
 import Data.Char
 import Data.List hiding (find)
 import qualified Data.List as List
@@ -254,27 +250,7 @@ runPipe Options{..} file = do
     (as, m) <- either (onError "runPipe") (uncurry applyFixities)
                 <$> parseModuleWithArgs optionsLanguage file
     when optionsDebug (putStrLn (showAnnData as 0 m))
-
-    let noOverlapInp = removeOverlap verb inp
-        allRefacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
-
-        posFilter (_, rs) =
-          case optionsPos of
-            Nothing -> True
-            Just p  -> any (flip spans p . pos) rs
-        filtRefacts = filter posFilter allRefacts
-        refacts = concatMap snd filtRefacts
-
-    when (verb >= Normal) (traceM $ "Applying " ++ show (length refacts) ++ " hints")
-    when (verb == Loud) (traceM $ show filtRefacts)
-
-    -- need a check here to avoid overlap
-    (ares, res) <- if optionsStep
-                    then fromMaybe (as, m) <$> runMaybeT (refactoringLoop as m filtRefacts)
-                    else return . flip evalState 0 $
-                            foldM (uncurry runRefactoring) (as, m) refacts
-    when optionsDebug (putStrLn (showAnnData ares 0 res))
-    pure . runIdentity $ exactPrintWithOptions refactOptions res ares
+    apply optionsPos optionsStep inp file verb as m
 
   if optionsInplace && isJust optionsTarget
     then writeFileUTF8 file output
@@ -283,42 +259,6 @@ runPipe Options{..} file = do
           Just f  -> do
             when (verb == Loud) (traceM $ "Writing result to " ++ f)
             writeFileUTF8 f output
-
-data LoopOption = LoopOption
-                    { desc :: String
-                    , perform :: MaybeT IO (Anns, Module) }
-
-refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
-                -> MaybeT IO (Anns, Module)
-refactoringLoop as m [] = pure (as, m)
-refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
-refactoringLoop as m hints@((hintDesc, rs): rss) =
-  do inp <- liftIO $ do
-        putStrLn hintDesc
-        putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
-        -- In case that the input also comes from stdin
-        withFile "/dev/tty" ReadMode hGetLine
-     maybe loopHelp perform (lookup inp opts)
-  where
-    opts =
-      [ ("y", LoopOption "Apply current hint" yAction)
-      , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
-      , ("q", LoopOption "Apply no further hints" (return (as, m)))
-      , ("d", LoopOption "Discard previous changes" mzero )
-      , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m as))
-                                              >> refactoringLoop as m hints))
-      , ("?", LoopOption "Show this help menu" loopHelp)]
-    loopHelp = do
-            liftIO . putStrLn . unlines . map mkLine $ opts
-            refactoringLoop as m hints
-    mkLine (c, opt) = c ++ " - " ++ desc opt
-    -- Force to force bottoms
-    yAction =
-      let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
-        in do
-          exactPrint r2 r1 `seq` return ()
-          refactoringLoop r1 r2 rss
-
 
 getHints :: Maybe FilePath -> IO String
 getHints (Just hintFile) = readFileUTF8' hintFile

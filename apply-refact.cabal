@@ -29,6 +29,7 @@ library
   exposed-modules:   Refact.Utils
                    , Refact.Apply
                    , Refact.Fixity
+  other-modules: Refact.Internal
   GHC-Options: -Wall
   build-depends: base >=4.12 && < 5
                , refact >= 0.2
@@ -52,6 +53,7 @@ executable refactor
                  Paths_apply_refact
                  Refact.Apply
                  Refact.Fixity
+                 Refact.Internal
                  Refact.Utils
                  Refact.Run
   hs-source-dirs:      src
@@ -65,7 +67,6 @@ executable refactor
                , containers >= 0.6.0.1
                , extra >= 1.7.3
                , syb
-               , mtl
                , process
                , directory
                , optparse-applicative >= 0.15.1.0
@@ -83,6 +84,7 @@ Test-Suite test
                  Refact.Run
                  Refact.Apply
                  Refact.Fixity
+                 Refact.Internal
                  Refact.Utils
   GHC-Options:         -threaded
   Default-language:    Haskell2010
@@ -99,7 +101,6 @@ Test-Suite test
                , containers >= 0.6.0.1
                , extra >= 1.7.3
                , syb
-               , mtl
                , process
                , directory
                , optparse-applicative

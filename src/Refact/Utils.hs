@@ -49,7 +49,7 @@ import HsExpr as GHC hiding (Stmt)
 import HsImpExp
 #endif
 
-import Control.Monad.State
+import Control.Monad.Trans.State
 
 import qualified Data.Map as Map
 import Data.Maybe
