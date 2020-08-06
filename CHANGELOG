@@ -1,3 +1,8 @@
+v0.8.2.1
+
+  * support GHC 8.8.4
+  * remove dependency on mtl
+
 v0.8.2.0
 
   * #75, support refactoring for Eta reduce
