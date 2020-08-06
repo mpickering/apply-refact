@@ -23,7 +23,7 @@ import Data.List
 import Data.Maybe
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 
-import Control.Monad.State
+import Control.Monad.Trans.State
 import qualified Data.Map as Map
 import Data.Tuple
 
