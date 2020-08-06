@@ -169,7 +169,14 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
           refactoringLoop r1 r2 rss
 
 -- | Apply a set of refactorings as supplied by hlint
-applyRefactorings :: Maybe (Int, Int) -> [(String, [Refactoring R.SrcSpan])] -> FilePath -> IO String
+applyRefactorings
+  :: Maybe (Int, Int)
+  -- ^ Apply hints relevant to a specific position
+  -> [(String, [Refactoring R.SrcSpan])]
+  -- ^ A list of (hint description, refactorings) pairs.
+  -> FilePath
+  -- ^ Target file
+  -> IO String
 applyRefactorings optionsPos inp file = do
   (as, m) <- either (onError "apply") (uncurry applyFixities)
               <$> parseModuleWithOptions rigidLayout file
