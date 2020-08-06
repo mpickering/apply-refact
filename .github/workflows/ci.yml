@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        ghc: ["8.10.1", "8.8.3", "8.6.5"]
+        ghc: ["8.10.1", "8.8.4", "8.6.5"]
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1.1.2
+      - uses: actions/setup-haskell@2215b2c
         id: setup-haskell-cabal
         with:
           ghc-version: ${{ matrix.ghc }}
@@ -28,4 +28,4 @@ jobs:
             ${{ steps.setup-haskell-cabal.outputs.cabal-store }}
             dist-newstyle
           key: ${{ runner.os }}-${{ matrix.ghc }}-${{ hashFiles('cabal.project.freeze') }}
-      - run: cabal new-test
+      - run: cabal v2-test
