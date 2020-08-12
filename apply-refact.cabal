@@ -38,11 +38,11 @@ library
                , containers >= 0.6.0.1 && < 0.7
                , extra >= 1.7.3
                , syb >= 0.7.1
-               , process >= 1.6.8.0
+               , process >= 1.6
                , transformers >= 0.5.6.2 && < 0.6
                , filemanip >= 0.3.6.3 && < 0.4
                , unix-compat >= 0.5.2
-               , directory >= 1.3.6.0
+               , directory >= 1.3
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -55,6 +55,8 @@ executable refactor
                  Refact.Internal
                  Refact.Utils
                  Refact.Run
+  autogen-modules:
+                 Paths_apply_refact
   hs-source-dirs:      src
   default-language: Haskell2010
   ghc-options: -Wall -fno-warn-unused-do-bind
