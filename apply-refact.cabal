@@ -53,8 +53,8 @@ executable refactor
                  Refact.Apply
                  Refact.Fixity
                  Refact.Internal
-                 Refact.Utils
                  Refact.Run
+                 Refact.Utils
   autogen-modules:
                  Paths_apply_refact
   hs-source-dirs:      src
@@ -82,10 +82,10 @@ Test-Suite test
   main-is:             Test.hs
   other-modules:
                  Paths_apply_refact
-                 Refact.Run
                  Refact.Apply
                  Refact.Fixity
                  Refact.Internal
+                 Refact.Run
                  Refact.Utils
   GHC-Options:         -threaded
   Default-language:    Haskell2010
