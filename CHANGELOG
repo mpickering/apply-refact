@@ -1,3 +1,5 @@
+  * #78, remove some exported functions in Refact.Apply that are only relevant to runPipe
+
 v0.8.2.1
 
   * support GHC 8.8.4
