@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -45,10 +44,6 @@ import qualified System.PosixCompat.Files as F
 import Paths_apply_refact
 
 import Debug.Trace
-
-#if __GLASGOW_HASKELL__ <= 806
-type MonadFail = Monad
-#endif
 
 refactMain :: IO ()
 refactMain = do
