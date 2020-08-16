@@ -59,8 +59,11 @@ refactMain :: IO ()
 refactMain = do
   o@Options{..} <- execParser optionsWithHelp
   when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
-  unless (isJust optionsTarget || isJust optionsRefactFile)
-    (error "Must specify either the target file or the refact file")
+  unless (isJust optionsTarget || isJust optionsRefactFile) . die $
+    "Must specify either the target file, or the refact file, or both.\n"
+    ++ "If either the target file or the refact file is not specified, "
+    ++ "it will be read from stdin.\n"
+    ++ "To show usage, run 'refactor -h'."
   case optionsTarget of
     Nothing ->
       withTempFile $ \fp -> do
@@ -111,7 +114,8 @@ options = do
   optionsRefactFile <- option (Just <$> str) $ mconcat
     [ long "refact-file"
     , value Nothing
-    , help "A file which specifies which refactorings to perform"
+    , help $ "A file which specifies which refactorings to perform. "
+          ++ "If not specified, it will be read from stdin, in which case TARGET must be specified."
     ]
   optionsInplace <- switch $ mconcat
     [ long "inplace"
