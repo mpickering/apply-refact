@@ -1,7 +1,6 @@
-module Main where
+module Main (main) where
 
-import Refact.Run
+import Refact.Run (refactMain)
 
 main :: IO ()
 main = refactMain
-

@@ -1,22 +1,20 @@
 module Main where
 
-import Test.Tasty
-import Test.Tasty.Golden
+import Options.Applicative
 import System.Directory
 import System.FilePath
-
-import Options.Applicative
-
-import Refact.Run (Options(..), runPipe)
-import Refact.Internal (Verbosity(..))
-
-import System.IO.Silently
 import System.IO
+import System.IO.Silently
+import System.Process
+
+import Refact.Internal (Verbosity(..))
+import Refact.Options (Options(..))
+import Refact.Run (runPipe)
 
 import Debug.Trace
-import System.Process
+import Test.Tasty
 import Test.Tasty.ExpectedFailure
-
+import Test.Tasty.Golden
 
 main =
   defaultMain . mkTests =<< findTests
@@ -25,7 +23,6 @@ testDir = "tests/examples"
 
 findTests :: IO [FilePath]
 findTests = findByExtension [".hs"] testDir
-
 
 mkTests :: [FilePath] -> TestTree
 mkTests files = testGroup "Unit tests" (map mkTest files)

@@ -53,6 +53,7 @@ executable refactor
                  Refact.Apply
                  Refact.Fixity
                  Refact.Internal
+                 Refact.Options
                  Refact.Run
                  Refact.Utils
   autogen-modules:
@@ -85,6 +86,7 @@ Test-Suite test
                  Refact.Apply
                  Refact.Fixity
                  Refact.Internal
+                 Refact.Options
                  Refact.Run
                  Refact.Utils
   GHC-Options:         -threaded
