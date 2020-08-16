@@ -21,9 +21,8 @@ import Language.Haskell.GHC.ExactPrint.Utils
 
 import qualified Refact.Types as R
 import Refact.Types hiding (SrcSpan)
-import Refact.Apply
 import Refact.Fixity
-import Refact.Internal (apply)
+import Refact.Internal (Errors, Verbosity(..), apply, onError, mkErr, rigidLayout)
 
 import DynFlags
 import HeaderInfo (getOptions)
