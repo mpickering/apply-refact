@@ -8,15 +8,13 @@ module Refact.Apply
 import Language.Haskell.GHC.ExactPrint.Parsers (parseModuleWithOptions)
 import Refact.Fixity
 import Refact.Internal
-import Refact.Types hiding (SrcSpan)
-import Refact.Types (Refactoring)
-import qualified Refact.Types as R
+import Refact.Types
 
 -- | Apply a set of refactorings as supplied by hlint
 applyRefactorings
   :: Maybe (Int, Int)
   -- ^ Apply hints relevant to a specific position
-  -> [[Refactoring R.SrcSpan]]
+  -> [[Refactoring SrcSpan]]
   -- ^ 'Refactoring's to apply. Each inner list corresponds to an HLint
   -- <https://hackage.haskell.org/package/hlint/docs/Language-Haskell-HLint.html#t:Idea Idea>.
   -- An @Idea@ may have more than one 'Refactoring'.
