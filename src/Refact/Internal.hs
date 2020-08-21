@@ -12,7 +12,6 @@
 module Refact.Internal
   ( apply
   , runRefactoring
-  , applyRefactorings
 
   -- * Support for runPipe in the main process
   , Verbosity(..)
@@ -68,7 +67,6 @@ import qualified GHC hiding (parseModule)
 import qualified Name as GHC
 import qualified RdrName as GHC
 
-import Refact.Fixity
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind
@@ -167,20 +165,6 @@ refactoringLoop as m hints@((hintDesc, rs): rss) =
         in do
           exactPrint r2 r1 `seq` return ()
           refactoringLoop r1 r2 rss
-
--- | Apply a set of refactorings as supplied by hlint
-applyRefactorings
-  :: Maybe (Int, Int)
-  -- ^ Apply hints relevant to a specific position
-  -> [(String, [Refactoring R.SrcSpan])]
-  -- ^ A list of (hint description, refactorings) pairs.
-  -> FilePath
-  -- ^ Target file
-  -> IO String
-applyRefactorings optionsPos inp file = do
-  (as, m) <- either (onError "apply") (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
-  apply optionsPos False inp file Silent as m
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
