@@ -29,9 +29,8 @@ import Data.Tuple
 
 -- | Rearrange infix expressions to account for fixity.
 -- The set of fixities is wired in and includes all fixities in base.
-applyFixities :: Anns -> Module -> (Anns, Module)
-applyFixities as m = let (as', m') = swap $ runState (everywhereM (mkM expFix) m) as
-                     in (as', m') --error (showAnnData as 0 m ++ showAnnData as' 0 m')
+applyFixities :: Anns -> Module -> IO (Anns, Module)
+applyFixities as m = swap <$> runStateT (everywhereM (mkM expFix) m) as
 
 expFix :: LHsExpr GhcPs -> M (LHsExpr GhcPs)
 expFix (L loc (OpApp _ l op r)) =

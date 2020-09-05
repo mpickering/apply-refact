@@ -28,5 +28,5 @@ applyRefactorings
   -> IO String
 applyRefactorings optionsPos inp file = do
   (as, m) <- either (onError "apply") (uncurry applyFixities)
-              <$> parseModuleWithOptions rigidLayout file
+              =<< parseModuleWithOptions rigidLayout file
   apply optionsPos False ((mempty,) <$> inp) file Silent as m
