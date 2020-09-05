@@ -39,7 +39,6 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.State
 import Data.Char (isAlphaNum)
 import Data.Data
-import Data.Either.Extra (maybeToEither)
 import Data.Functor.Identity (Identity(..))
 import Data.Generics hiding (GT)
 import qualified Data.Map as Map
@@ -72,7 +71,7 @@ import qualified RdrName as GHC
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Stmt, Pat, Name, M, Module, Expr, Type, FunBind
+import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, setSrcSpanFile)
 
 #if __GLASGOW_HASKELL__ >= 810
@@ -237,7 +236,7 @@ runRefactoring as m r@Replace{} = do
     Import -> replaceWorker as m parseImport seed r
 
 runRefactoring as m ModifyComment{..} =
-    return (Map.map go as, m)
+    pure (Map.map go as, m)
     where
       go a@Ann{ annPriorComments, annsDP } =
         a { annsDP = map changeComment annsDP
@@ -252,7 +251,7 @@ runRefactoring as m Delete{rtype, pos} = do
             Stmt -> doDeleteStmt ((/= pos) . getLoc)
             Import -> doDeleteImport ((/= pos) . getLoc)
             _ -> id
-  return (as, f m)
+  pure (as, f m)
   {-
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
@@ -280,7 +279,7 @@ parseModuleName :: SrcSpan -> Parser (GHC.Located GHC.ModuleName)
 parseModuleName ss _ _ s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
       newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
-  in return (newAnns, newMN)
+  in pure (newAnns, newMN)
 parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
   case parseDecl dyn fname s of
@@ -347,9 +346,9 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
-      return $ GHC.FunRhs new b s
-    subst o _ = return o
-identSub _ _ e = return e
+      pure $ GHC.FunRhs new b s
+    subst o _ = pure o
+identSub _ _ e = pure e
 
 
 -- g is usually modifyAnnKey
@@ -580,27 +579,44 @@ replaceWorker as m parser seed Replace{..} = do
     _ -> pure (as, m)
 replaceWorker as m _ _ _  = pure (as, m)
 
-data NotFound = forall a. Typeable a => NotFound (Proxy a) SrcSpan
+data NotFound = NotFound
+  { nfExpected :: String
+  , nfActual :: Maybe String
+  , nfLoc :: SrcSpan
+  }
 
 renderNotFound :: NotFound -> String
-renderNotFound (NotFound p loc) =
+renderNotFound NotFound{..} =
   "Expected type not found at the location specified in the refact file.\n"
-  ++ "  Expected type: " ++ show (typeRep p) ++ "\n"
-  ++ "  Location: " ++ showSDocUnsafe (ppr loc)
+  ++ "  Expected type: " ++ nfExpected ++ "\n"
+  ++ maybe "" (\actual -> "  Actual type: " ++ actual ++ "\n") nfActual
+  ++ "  Location: " ++ showSDocUnsafe (ppr nfLoc)
 
 -- Find a given type with a given SrcSpan
 findInModule :: forall a modu. (Data a, Data modu) => modu -> SrcSpan -> Either NotFound (GHC.Located a)
-findInModule m ss = maybeToEither (NotFound (Proxy @a) ss) (doTrans m)
+findInModule m ss = case doTrans m of
+  Just a -> Right a
+  Nothing ->
+    let expected = show (typeRep (Proxy @a))
+        actual = listToMaybe $ catMaybes
+          [ showType (doTrans m :: Maybe Expr)
+          , showType (doTrans m :: Maybe Type)
+          , showType (doTrans m :: Maybe Decl)
+          , showType (doTrans m :: Maybe Pat)
+          , showType (doTrans m :: Maybe Name)
+          ]
+     in Left $ NotFound expected actual ss
   where
-    doTrans :: modu -> Maybe (GHC.Located a)
+    doTrans :: forall b. Data b => modu -> Maybe (GHC.Located b)
     doTrans = something (mkQ Nothing (findLargestExpression ss))
 
-findLargestExpression :: SrcSpan -> GHC.Located ast
-                      -> Maybe (GHC.Located ast)
-findLargestExpression ss e@(GHC.L l _) =
-  if l == ss
-    then Just e
-    else Nothing
+    showType :: forall b. Typeable b => Maybe (GHC.Located b) -> Maybe String
+    showType = fmap $ \_ -> show (typeRep (Proxy @b))
+
+findLargestExpression :: SrcSpan -> GHC.Located a -> Maybe (GHC.Located a)
+findLargestExpression ss e@(GHC.L l _)
+  | l == ss = Just e
+  | otherwise = Nothing
 
 findOrError
   :: forall a modu m. (Data a, Data modu, MonadIO m)
