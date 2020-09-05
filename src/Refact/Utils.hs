@@ -63,7 +63,7 @@ import Unsafe.Coerce
 
 -- Types
 --
-type M a = State Anns a
+type M a = StateT Anns IO a
 
 type Module = (GHC.Located (GHC.HsModule GHC.GhcPs))
 

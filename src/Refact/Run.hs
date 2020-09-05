@@ -142,7 +142,7 @@ runPipe Options{..} file = do
   output <- if null inp then readFileUTF8' file else do
     when (verb == Loud) (traceM "Parsing module")
     (as, m) <- either (onError "runPipe") (uncurry applyFixities)
-                <$> parseModuleWithArgs optionsLanguage file
+                =<< parseModuleWithArgs optionsLanguage file
     when optionsDebug (putStrLn (showAnnData as 0 m))
     apply optionsPos optionsStep inp file verb as m
 

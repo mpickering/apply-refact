@@ -32,20 +32,23 @@ import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
 import Language.Haskell.GHC.ExactPrint.Utils
 
 import Control.Arrow
+import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO(..))
 import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.State
 import Data.Char (isAlphaNum)
 import Data.Data
+import Data.Either.Extra (maybeToEither)
 import Data.Functor.Identity (Identity(..))
 import Data.Generics hiding (GT)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
 import Data.Ord
+import GHC.IO.Exception (IOErrorType(..))
 import System.IO
-import System.IO.Unsafe
+import System.IO.Error (mkIOError)
 
 import Debug.Trace
 
@@ -53,7 +56,6 @@ import Debug.Trace
 import GHC.Hs.Expr as GHC hiding (Stmt)
 import GHC.Hs.ImpExp
 import GHC.Hs hiding (Pat, Stmt)
-import Outputable hiding ((<>))
 import ErrUtils
 import Bag
 #else
@@ -62,6 +64,7 @@ import HsImpExp
 import HsSyn hiding (Pat, Stmt, noExt)
 #endif
 
+import Outputable hiding ((<>))
 import SrcLoc
 import qualified GHC hiding (parseModule)
 import qualified Name as GHC
@@ -69,7 +72,7 @@ import qualified RdrName as GHC
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind
+import Refact.Utils (Stmt, Pat, Name, M, Module, Expr, Type, FunBind
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, setSrcSpanFile)
 
 #if __GLASGOW_HASKELL__ >= 810
@@ -127,7 +130,7 @@ apply mpos step inp file verb as0 m0 = do
   -- need a check here to avoid overlap
   (as, m) <- if step
                then fromMaybe (as0, m0) <$> runMaybeT (refactoringLoop as0 m0 filtRefacts)
-               else pure . flip evalState 0 $
+               else flip evalStateT 0 $
                       foldM (uncurry runRefactoring) (as0, m0) refacts
   pure . runIdentity $ exactPrintWithOptions refactOptions m as
 
@@ -135,36 +138,34 @@ data LoopOption = LoopOption
                     { desc :: String
                     , perform :: MaybeT IO (Anns, Module) }
 
-refactoringLoop :: Anns -> Module -> [(String, [Refactoring GHC.SrcSpan])]
+refactoringLoop :: Anns -> Module -> [(String, [Refactoring SrcSpan])]
                 -> MaybeT IO (Anns, Module)
 refactoringLoop as m [] = pure (as, m)
 refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
-refactoringLoop as m hints@((hintDesc, rs): rss) =
-  do inp <- liftIO $ do
-        putStrLn hintDesc
-        putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
-        -- In case that the input also comes from stdin
-        withFile "/dev/tty" ReadMode hGetLine
-     maybe loopHelp perform (lookup inp opts)
-  where
-    opts =
-      [ ("y", LoopOption "Apply current hint" yAction)
-      , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
-      , ("q", LoopOption "Apply no further hints" (return (as, m)))
-      , ("d", LoopOption "Discard previous changes" mzero )
-      , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m as))
-                                              >> refactoringLoop as m hints))
-      , ("?", LoopOption "Show this help menu" loopHelp)]
-    loopHelp = do
-            liftIO . putStrLn . unlines . map mkLine $ opts
-            refactoringLoop as m hints
-    mkLine (c, opt) = c ++ " - " ++ desc opt
+refactoringLoop as m hints@((hintDesc, rs): rss) = do
     -- Force to force bottoms
-    yAction =
-      let (!r1, !r2) = flip evalState 0 $ foldM (uncurry runRefactoring) (as, m) rs
-        in do
-          exactPrint r2 r1 `seq` return ()
+    (!r1, !r2) <- liftIO $ flip evalStateT 0 $ foldM (uncurry runRefactoring) (as, m) rs
+    let yAction = do
+          exactPrint r2 r1 `seq` pure ()
           refactoringLoop r1 r2 rss
+        opts =
+          [ ("y", LoopOption "Apply current hint" yAction)
+          , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
+          , ("q", LoopOption "Apply no further hints" (pure (as, m)))
+          , ("d", LoopOption "Discard previous changes" mzero )
+          , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m as))
+                                                  >> refactoringLoop as m hints))
+          , ("?", LoopOption "Show this help menu" loopHelp)]
+        loopHelp = do
+                liftIO . putStrLn . unlines . map mkLine $ opts
+                refactoringLoop as m hints
+        mkLine (c, opt) = c ++ " - " ++ desc opt
+    inp <- liftIO $ do
+      putStrLn hintDesc
+      putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
+      -- In case that the input also comes from stdin
+      withFile "/dev/tty" ReadMode hGetLine
+    maybe loopHelp perform (lookup inp opts)
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
@@ -217,14 +218,14 @@ removeOverlap verb = dropOverlapping . sortBy f . summarize
 
 -- Perform the substitutions
 
-getSeed :: State Int Int
+getSeed :: Monad m => StateT Int m Int
 getSeed = get <* modify (+1)
 
 -- | Peform a @Refactoring@.
-runRefactoring :: Data a => Anns -> a -> Refactoring GHC.SrcSpan -> State Int (Anns, a)
-runRefactoring as m r@Replace{}  = do
+runRefactoring :: Data a => Anns -> a -> Refactoring SrcSpan -> StateT Int IO (Anns, a)
+runRefactoring as m r@Replace{} = do
   seed <- getSeed
-  return $ case rtype r of
+  liftIO $ case rtype r of
     Expr -> replaceWorker as m parseExpr seed r
     Decl -> replaceWorker as m parseDecl seed r
     Type -> replaceWorker as m parseType seed r
@@ -256,11 +257,11 @@ runRefactoring as m Delete{rtype, pos} = do
 runRefactoring as m Rename{nameSubts} = (as, m)
   --(as, doRename nameSubts m)
  -}
-runRefactoring as m InsertComment{..} =
-  let exprkey = mkAnnKey (findDecl m pos) in
-  return (insertComment exprkey newComment as, m)
+runRefactoring as m InsertComment{..} = do
+  exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m pos
+  pure (insertComment exprkey newComment as, m)
 runRefactoring as m RemoveAsKeyword{..} =
-  return (as, removeAsKeyword m)
+  pure (as, removeAsKeyword m)
   where
     removeAsKeyword = everywhere (mkT go)
     go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
@@ -275,7 +276,7 @@ mkErr df l s = unitBag (mkPlainErrMsg df l (text s))
 mkErr = const (,)
 #endif
 
-parseModuleName :: GHC.SrcSpan -> Parser (GHC.Located GHC.ModuleName)
+parseModuleName :: SrcSpan -> Parser (GHC.Located GHC.ModuleName)
 parseModuleName ss _ _ s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
       newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
@@ -300,7 +301,7 @@ parseMatch dyn fname s =
 -- Substitute variables into templates
 -- Finds places in the templates where we need to insert variables.
 
-substTransform :: (Data a, Data b) => b -> [(String, GHC.SrcSpan)] -> a -> M a
+substTransform :: (Data a, Data b) => b -> [(String, SrcSpan)] -> a -> M a
 substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     `extM` identSub m ss
                                     `extM` patSub m ss
@@ -308,26 +309,25 @@ substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     `extM` exprSub m ss
                                     )
 
-stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
+stmtSub :: Data a => a -> [(String, SrcSpan)] -> Stmt -> M Stmt
 stmtSub m subs old@(GHC.L _ (BodyStmt _ (GHC.L _ (HsVar _ (L _ name))) _ _) ) =
-  resolveRdrName m (findStmt m) old subs name
-stmtSub _ _ e = return e
+  resolveRdrName m (findOrError m) old subs name
+stmtSub _ _ e = pure e
 
-patSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
+patSub :: Data a => a -> [(String, SrcSpan)] -> Pat -> M Pat
 patSub m subs old@(GHC.L _ (VarPat _ (L _ name))) =
-  resolveRdrName m (findPat m) old subs name
-patSub _ _ e = return e
+  resolveRdrName m (findOrError m) old subs name
+patSub _ _ e = pure e
 
-typeSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Type -> M Type
+typeSub :: Data a => a -> [(String, SrcSpan)] -> Type -> M Type
 typeSub m subs old@(GHC.L _ (HsTyVar _ _ (L _ name))) =
-  resolveRdrName m (findType m) old subs name
-typeSub _ _ e = return e
+  resolveRdrName m (findOrError m) old subs name
+typeSub _ _ e = pure e
 
-exprSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
+exprSub :: Data a => a -> [(String, SrcSpan)] -> Expr -> M Expr
 exprSub m subs old@(GHC.L _ (HsVar _ (L _ name))) =
-  resolveRdrName m (findExpr m) old subs name
-exprSub _ _ e = return e
-
+  resolveRdrName m (findOrError m) old subs name
+exprSub _ _ e = pure e
 
 -- Used for Monad10, Monad11 tests.
 -- The issue being that in one case the information is attached to a VarPat
@@ -336,9 +336,9 @@ exprSub _ _ e = return e
 -- This looks convoluted but we can't match directly on a located name as
 -- it is not specific enough. Instead we match on some bigger context which
 -- is contains the located name we want to replace.
-identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
+identSub :: Data a => a -> [(String, SrcSpan)] -> FunBind -> M FunBind
 identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
-  resolveRdrName' subst (findName m) old subs name
+  resolveRdrName' subst (findOrError m) old subs name
   where
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunRhs n b s) new = do
@@ -352,13 +352,12 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
 identSub _ _ e = return e
 
 
-
 -- g is usually modifyAnnKey
 -- f is usually a function which checks the locations are equal
 resolveRdrName' :: (a -> b -> M a)  -- How to combine the value to insert and the replaced value
-               -> (SrcSpan -> b)    -- How to find the new value, when given the location it is in
+               -> (SrcSpan -> M b)    -- How to find the new value, when given the location it is in
                -> a                 -- The old thing which we are going to possibly replace
-               -> [(String, GHC.SrcSpan)] -- Substs
+               -> [(String, SrcSpan)] -- Substs
                -> GHC.RdrName       -- The name of the position in the template
                                     --we are replacing into
                -> M a
@@ -366,14 +365,12 @@ resolveRdrName' g f old subs name =
   case name of
     -- Todo: this should replace anns as well?
     GHC.Unqual (GHC.occNameString . GHC.occName -> oname)
-      -> case lookup oname subs of
-              Just (f -> new) -> g old new
-              Nothing -> return old
-    _ -> return old
+      | Just ss <- lookup oname subs -> f ss >>= g old
+    _ -> pure old
 
 resolveRdrName :: (Data old, Data a)
                => a
-               -> (SrcSpan -> Located old)
+               -> (SrcSpan -> M (Located old))
                -> Located old
                -> [(String, SrcSpan)]
                -> GHC.RdrName
@@ -397,7 +394,7 @@ doGenReplacement
   -> (GHC.Located ast -> Bool)
   -> GHC.Located ast
   -> GHC.Located ast
-  -> State (Anns, Bool) (GHC.Located ast)
+  -> StateT (Anns, Bool) IO (GHC.Located ast)
 #else
 doGenReplacement
   :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
@@ -405,14 +402,14 @@ doGenReplacement
   -> (ast -> Bool)
   -> ast
   -> ast
-  -> State (Anns, Bool) ast
+  -> StateT (Anns, Bool) IO ast
 #endif
 doGenReplacement m p new old
   | p old = do
       anns <- gets fst
       let n = decomposeSrcSpan new
           o = decomposeSrcSpan old
-          newAnns = execState (modifyAnnKey m o n) anns
+      newAnns <- liftIO $ execStateT (modifyAnnKey m o n) anns
       put (newAnns, True)
       pure new
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
@@ -426,8 +423,8 @@ doGenReplacement m p new old
       anns <- gets fst
       let n = decomposeSrcSpan new
           o = decomposeSrcSpan old
-          intAnns = execState (modifyAnnKey m o n) anns
-          newFile = srcSpanFile newLocReal
+      intAnns <- liftIO $ execStateT (modifyAnnKey m o n) anns
+      let newFile = srcSpanFile newLocReal
           newLocal = everywhere (mkT $ setSrcSpanFile newFile) oldLocal
           newLocalLoc = getLoc newLocal
           ensureLoc = combineSrcSpans newLocalLoc
@@ -528,27 +525,26 @@ replaceWorker :: (Annotate a, Data mod)
               -> mod
               -> Parser (GHC.Located a)
               -> Int
-              -> Refactoring GHC.SrcSpan
-              -> (Anns, mod)
+              -> Refactoring SrcSpan
+              -> IO (Anns, mod)
 #else
 replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               => Anns
               -> mod
               -> Parser a
               -> Int
-              -> Refactoring GHC.SrcSpan
-              -> (Anns, mod)
+              -> Refactoring SrcSpan
+              -> IO (Anns, mod)
 #endif
-replaceWorker as m parser seed Replace{..} =
+replaceWorker as m parser seed Replace{..} = do
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
-      p s = unsafePerformIO (withDynFlags (\d -> parser d uniqueName s))
-      (relat, template) = case p orig of
-                              Right xs -> xs
-                              Left err -> onError "replaceWorked" err
 
-      (newExpr, newAnns) = runState (substTransform m subts template) (mergeAnns as relat)
-      lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
+  (relat, template) <- withDynFlags (\d -> parser d uniqueName orig) >>=
+    either (onError "replaceWorked") pure
+
+  (newExpr, newAnns) <- runStateT (substTransform m subts template) (mergeAnns as relat)
+  let lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
       adjacent _ _ = False
 
@@ -578,36 +574,26 @@ replaceWorker as m parser seed Replace{..} =
 
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))
-   in case runState (transformation m) (newAnns, False) of
-        (finalM, (finalAs, True)) -> (ensureSpace finalAs, finalM)
-        -- Failed to find a replacment so don't make any changes
-        _ -> (as, m)
-replaceWorker as m _ _ _  = (as, m)
+  runStateT (transformation m) (newAnns, False) >>= \case
+    (finalM, (finalAs, True)) -> pure (ensureSpace finalAs, finalM)
+    -- Failed to find a replacment so don't make any changes
+    _ -> pure (as, m)
+replaceWorker as m _ _ _  = pure (as, m)
 
--- Find the largest expression with a given SrcSpan
-findGen :: forall ast a . (Data ast, Data a) => String -> a -> SrcSpan -> GHC.Located ast
-findGen s m ss = fromMaybe (error (s ++ " " ++ showGhc ss)) (doTrans m)
+data NotFound = forall a. Typeable a => NotFound (Proxy a) SrcSpan
+
+renderNotFound :: NotFound -> String
+renderNotFound (NotFound p loc) =
+  "Expected type not found at the location specified in the refact file.\n"
+  ++ "  Expected type: " ++ show (typeRep p) ++ "\n"
+  ++ "  Location: " ++ showSDocUnsafe (ppr loc)
+
+-- Find a given type with a given SrcSpan
+findInModule :: forall a modu. (Data a, Data modu) => modu -> SrcSpan -> Either NotFound (GHC.Located a)
+findInModule m ss = maybeToEither (NotFound (Proxy @a) ss) (doTrans m)
   where
-    doTrans :: a -> Maybe (GHC.Located ast)
+    doTrans :: modu -> Maybe (GHC.Located a)
     doTrans = something (mkQ Nothing (findLargestExpression ss))
-
-findExpr :: Data a => a -> SrcSpan -> Expr
-findExpr = findGen "expr"
-
-findPat :: Data a => a -> SrcSpan -> Pat
-findPat = findGen "pat"
-
-findType :: Data a => a -> SrcSpan -> Type
-findType = findGen "type"
-
-findDecl :: Data a => a -> SrcSpan -> Decl
-findDecl = findGen "decl"
-
-findStmt :: Data a => a -> SrcSpan -> Stmt
-findStmt = findGen "stmt"
-
-findName :: Data a => a -> SrcSpan -> Name
-findName = findGen "name"
 
 findLargestExpression :: SrcSpan -> GHC.Located ast
                       -> Maybe (GHC.Located ast)
@@ -615,6 +601,13 @@ findLargestExpression ss e@(GHC.L l _) =
   if l == ss
     then Just e
     else Nothing
+
+findOrError
+  :: forall a modu m. (Data a, Data modu, MonadIO m)
+  => modu -> SrcSpan -> m (GHC.Located a)
+findOrError m = either f pure . findInModule m
+  where
+    f nf = liftIO . throwIO $ mkIOError InappropriateType (renderNotFound nf) Nothing Nothing
 
 -- Deletion from a list
 
