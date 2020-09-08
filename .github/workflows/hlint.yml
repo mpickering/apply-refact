@@ -1,0 +1,21 @@
+name: HLint
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    types:
+      - opened
+      - synchronize
+jobs:
+  hlint:
+    runs-on: ubuntu-20.04
+    steps:
+      - uses: actions/checkout@v2
+      - uses: rwe/actions-hlint-setup@v1
+        with:
+          version: '3.1.6'
+      - uses: rwe/actions-hlint-run@v2
+        with:
+          path: '["src/"]'
+          fail-on: status
