@@ -1,0 +1,4 @@
+f :: String -> String
+f = show
+  where y :: String
+        y = "foo"
