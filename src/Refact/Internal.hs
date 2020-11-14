@@ -454,8 +454,12 @@ doGenReplacement m p new old
                 in fromMaybe oldAnns $ do
                       oldAnn <- snd <$> find po oldAnns'
                       annWhere <- find ((== G GHC.AnnWhere) . fst) (annsDP oldAnn)
+                      let newSortKey = fmap (setSrcSpanFile newFile) <$> annSortKey oldAnn
                       newKey <- fst <$> find pn oldAnns'
-                      pure $ Map.adjust (\ann -> ann {annsDP = annsDP ann ++ [annWhere]}) newKey oldAnns
+                      pure $ Map.adjust
+                        (\ann -> ann {annsDP = annsDP ann ++ [annWhere], annSortKey = newSortKey})
+                        newKey
+                        oldAnns
 
               -- Expand the SrcSpan of the "GRHS" entry in the new file to include the local binds
               expandGRHSLoc = \case

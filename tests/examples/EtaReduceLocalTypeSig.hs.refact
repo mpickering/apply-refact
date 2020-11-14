@@ -1,0 +1,1 @@
+[("test/examples/EtaReduceLocalTypeSig.hs:2:1-12: Warning: Eta reduce\nFound:\n  f x = show x\nPerhaps:\n  f = show\n",[Replace {rtype = Decl, pos = SrcSpan {startLine = 2, startCol = 1, endLine = 2, endCol = 13}, subts = [("body",SrcSpan {startLine = 2, startCol = 7, endLine = 2, endCol = 11})], orig = "f = body"}])]
