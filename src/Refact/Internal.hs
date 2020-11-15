@@ -345,7 +345,7 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
           fakeExpr = GHC.L (getLoc new) (GHC.VarPat noExt new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
-      modify (\r -> replaceAnnKey r (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
+      modify (replaceAnnKey (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
       pure $ GHC.FunRhs new b s
     subst o _ = pure o
 identSub _ _ e = pure e
