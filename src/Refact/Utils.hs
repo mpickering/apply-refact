@@ -155,17 +155,38 @@ findParentWorker oldSS as a
 --
 -- For example, this function will ensure the correct relative position and
 -- make sure that any trailing semi colons or commas are transferred.
-modifyAnnKey :: (Data old, Data new, Data mod) => mod -> Located old -> Located new -> M (Located new)
+modifyAnnKey
+  :: (Data old, Data new, Data mod)
+  => mod -> Located old -> Located new -> M (Located new)
 modifyAnnKey m e1 e2 = do
-    as <- get
-    let parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) as m)
-    e2 <$ modify (\m' -> replaceAnnKey m' (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey)
+  as <- get
+  let parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) as m)
+  e2 <$ modify ( recoverBackquotes e1 e2
+               . replaceAnnKey (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey
+               )
 
+-- | When the template contains a backquoted substitution variable, but the substitute
+-- is not backquoted, we must add the corresponding 'GHC.AnnBackQuote's.
+--
+-- See tests/examples/Backquotes.hs for an example.
+recoverBackquotes :: Located old -> Located new -> Anns -> Anns
+recoverBackquotes (L old _) (L new _) anns
+  | Just annOld <- Map.lookup (AnnKey old (CN "Unqual")) anns
+  , ( (G GHC.AnnBackquote, DP (i, j))
+    : rest@( (G GHC.AnnVal, _)
+           : (G GHC.AnnBackquote, _)
+           : _)
+    ) <- annsDP annOld
+  = let f annNew = case annsDP annNew of
+          [(G GHC.AnnVal, DP (i', j'))] ->
+            annNew {annsDP = (G GHC.AnnBackquote, DP (i + i', j + j')) : rest}
+          _ -> annNew
+     in Map.adjust f (AnnKey new (CN "Unqual")) anns
+  | otherwise = anns
 
 -- | Lower level version of @modifyAnnKey@
-replaceAnnKey ::
-  Anns -> AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns
-replaceAnnKey a old new inp deltainfo =
+replaceAnnKey :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Anns
+replaceAnnKey old new inp deltainfo a =
   fromMaybe a (replace old new inp deltainfo a)
 
 
