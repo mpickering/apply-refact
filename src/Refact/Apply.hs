@@ -30,7 +30,7 @@ applyRefactorings
   -- ^ Target file
   -> ([Extension], [Extension])
   -- ^ Enabled and disabled extensions. These are in addition to the @LANGUAGE@ pragmas
-  -- in the target file. When they conflict with the @LANGUAGE@ pragmas, the pragams win.
+  -- in the target file. When they conflict with the @LANGUAGE@ pragmas, pragmas win.
   -> IO String
 applyRefactorings optionsPos inp file exts = do
   (as, m) <- either (onError "apply") (uncurry applyFixities)
