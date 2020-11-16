@@ -18,7 +18,7 @@ extra-source-files:  CHANGELOG
                    , tests/examples/*.hs
                    , tests/examples/*.hs.refact
                    , tests/examples/*.hs.expected
-tested-with:         GHC == 8.10.2, GHC == 8.8.4, GHC == 8.6.5
+tested-with:         GHC == 8.10.2, GHC == 8.8.4
 
 
 source-repository head
@@ -34,7 +34,8 @@ library
   build-depends: base >=4.12 && < 5
                , refact >= 0.2
                , ghc-exactprint >= 0.6.3.3
-               , ghc >= 8.6
+               , ghc >= 8.8
+               , ghc-lib-parser-ex >= 8.10.0.16
                , containers >= 0.6.0.1 && < 0.7
                , extra >= 1.7.3
                , syb >= 0.7.1
@@ -66,6 +67,7 @@ executable refactor
                , ghc-exactprint
                , ghc
                , ghc-boot-th
+               , ghc-lib-parser-ex
                , containers
                , extra
                , syb
@@ -99,6 +101,7 @@ Test-Suite test
                , ghc-exactprint
                , ghc
                , ghc-boot-th
+               , ghc-lib-parser-ex
                , containers
                , extra
                , syb

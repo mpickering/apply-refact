@@ -1,0 +1,2 @@
+packages: *.cabal
+constraints: ghc-lib-parser-ex -auto +no-ghc-lib

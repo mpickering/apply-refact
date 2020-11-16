@@ -1,11 +1,14 @@
 {-# LANGUAGE TupleSections #-}
 
 module Refact.Apply
-  ( runRefactoring
-  , applyRefactorings
+  ( applyRefactorings
+  , runRefactoring
+  , parseExtensions
   ) where
 
-import Language.Haskell.GHC.ExactPrint.Parsers (parseModuleWithOptions)
+import Data.List
+import GHC.LanguageExtensions.Type (Extension(..))
+import Language.Haskell.GhclibParserEx.GHC.Driver.Session (impliedXFlags, readExtension)
 import Refact.Fixity
 import Refact.Internal
 import Refact.Types
@@ -25,8 +28,40 @@ applyRefactorings
   -- prior to it which has an overlapping source span and is not filtered out.
   -> FilePath
   -- ^ Target file
+  -> ([Extension], [Extension])
+  -- ^ Enabled and disabled extensions. These are in addition to the @LANGUAGE@ pragmas
+  -- in the target file. When they conflict with the @LANGUAGE@ pragmas, the pragams win.
   -> IO String
-applyRefactorings optionsPos inp file = do
+applyRefactorings optionsPos inp file exts = do
   (as, m) <- either (onError "apply") (uncurry applyFixities)
-              =<< parseModuleWithOptions rigidLayout file
+              =<< parseModuleWithArgs exts file
   apply optionsPos False ((mempty,) <$> inp) file Silent as m
+
+-- | Parse the input into (enabled extensions, disabled extensions, invalid input).
+-- Implied extensions are automatically added. For example, @FunctionalDependencies@
+-- implies @MultiParamTypeClasses@, and @RebindableSyntax@ implies @NoImplicitPrelude@.
+--
+-- The input is processed from left to right. An extension (e.g., @StarIsType@)
+-- may be overridden later (e.g., by @NoStarIsType@).
+--
+-- Extensions that appear earlier in the input will appear later in the output.
+-- Implied extensions appear in the end. If an extension occurs multiple times in the input,
+-- the last one is used.
+--
+-- >>> parseExtensions ["GADTs", "RebindableSyntax", "StarIsType", "GADTs", "InvalidExtension", "NoStarIsType"]
+-- ([GADTs, RebindableSyntax, GADTSyntax, MonoLocalBinds], [StarIsType, ImplicitPrelude], ["InvalidExtension"])
+parseExtensions :: [String] -> ([Extension], [Extension], [String])
+parseExtensions = addImplied . foldl' f mempty
+  where
+    f :: ([Extension], [Extension], [String]) -> String -> ([Extension], [Extension], [String])
+    f (ys, ns, is) ('N' : 'o' : s) | Just ext <- readExtension s =
+      (delete ext ys, ext : delete ext ns, is)
+    f (ys, ns, is) s | Just ext <- readExtension s =
+      (ext : delete ext ys, delete ext ns, is)
+    f (ys, ns, is) s = (ys, ns, s : is)
+
+    addImplied :: ([Extension], [Extension], [String]) -> ([Extension], [Extension], [String])
+    addImplied (ys, ns, is) = (ys ++ impliedOn, ns ++ impliedOff, is)
+      where
+        impliedOn = [b | ext <- ys, (a, True, b) <- impliedXFlags, a == ext]
+        impliedOff = [b | ext <- ys, (a, False, b) <- impliedXFlags, a == ext]

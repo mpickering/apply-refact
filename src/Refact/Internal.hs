@@ -12,6 +12,8 @@
 module Refact.Internal
   ( apply
   , runRefactoring
+  , addExtensionsToFlags
+  , parseModuleWithArgs
 
   -- * Support for runPipe in the main process
   , Verbosity(..)
@@ -45,9 +47,16 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
 import Data.Ord
+import DynFlags hiding (initDynFlags)
+import HeaderInfo (getOptions)
+import HscTypes (handleSourceError)
 import GHC.IO.Exception (IOErrorType(..))
+import GHC.LanguageExtensions.Type (Extension(..))
+import Panic (handleGhcException)
+import StringBuffer (stringToStringBuffer)
 import System.IO
 import System.IO.Error (mkIOError)
+import System.IO.Extra
 
 import Debug.Trace
 
@@ -82,16 +91,6 @@ onError s = pprPanic s . vcat . pprErrMsgBagWithLoc
 type Errors = (SrcSpan, String)
 onError :: String -> Errors -> a
 onError _ = error . show
-#endif
-
-#if __GLASGOW_HASKELL__ <= 806
-composeSrcSpan :: a -> a
-composeSrcSpan = id
-
-decomposeSrcSpan :: a -> a
-decomposeSrcSpan = id
-
-type SrcSpanLess a = a
 #endif
 
 -- library access to perform the substitutions
@@ -386,15 +385,6 @@ insertComment k s as =
 
 
 -- Substitute the template into the original AST.
-#if __GLASGOW_HASKELL__ <= 806
-doGenReplacement
-  :: forall ast a. (Data ast, Data a)
-  => a
-  -> (GHC.Located ast -> Bool)
-  -> GHC.Located ast
-  -> GHC.Located ast
-  -> StateT (Anns, Bool) IO (GHC.Located ast)
-#else
 doGenReplacement
   :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
   => a
@@ -402,7 +392,6 @@ doGenReplacement
   -> ast
   -> ast
   -> StateT (Anns, Bool) IO ast
-#endif
 doGenReplacement m p new old
   | p old = do
       anns <- gets fst
@@ -522,15 +511,6 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newMG = origMG{mg_alts = L locMG [L locMatch newMatch]}
     newBind = origBind{fun_matches = newMG}
 
-#if __GLASGOW_HASKELL__ <= 806
-replaceWorker :: (Annotate a, Data mod)
-              => Anns
-              -> mod
-              -> Parser (GHC.Located a)
-              -> Int
-              -> Refactoring SrcSpan
-              -> IO (Anns, mod)
-#else
 replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               => Anns
               -> mod
@@ -538,7 +518,6 @@ replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               -> Int
               -> Refactoring SrcSpan
               -> IO (Anns, mod)
-#endif
 replaceWorker as m parser seed Replace{..} = do
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
@@ -649,3 +628,33 @@ doRename ss = everywhere (mkT rename)
           (s, n) = (GHC.occNameString v, GHC.occNameSpace v)
           s' = fromMaybe s (lookup s ss)
 -}
+
+addExtensionsToFlags
+  :: [Extension] -> [Extension] -> FilePath -> DynFlags
+  -> IO (Either String DynFlags)
+addExtensionsToFlags es ds fp flags = catchErrors $ do
+    (stringToStringBuffer -> buf) <- readFileUTF8' fp
+    let opts = getOptions flags buf fp
+        withExts = flip (foldl' xopt_unset) ds
+                      . flip (foldl' xopt_set) es
+                      $ flags
+    (withPragmas, _, _) <- parseDynamicFilePragma withExts opts
+    pure . Right $ withPragmas `gopt_set` Opt_KeepRawTokenStream
+  where
+    catchErrors = handleGhcException (pure . Left . show)
+                . handleSourceError (pure . Left . show)
+
+parseModuleWithArgs
+  :: ([Extension], [Extension])
+  -> FilePath
+  -> IO (Either Errors (Anns, GHC.ParsedSource))
+parseModuleWithArgs (es, ds) fp = ghcWrapper $ do
+  initFlags <- initDynFlags fp
+  eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
+  case eflags of
+    -- TODO: report error properly.
+    Left err -> pure . Left $ mkErr initFlags (UnhelpfulSpan mempty) err
+    Right flags -> do
+      _ <- GHC.setSessionDynFlags flags
+      res <- parseModuleApiAnnsWithCppInternal defaultCppOptions flags fp
+      pure $ postParseTransform res rigidLayout
