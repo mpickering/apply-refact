@@ -12,6 +12,8 @@
 module Refact.Internal
   ( apply
   , runRefactoring
+  , addExtensionsToFlags
+  , parseModuleWithArgs
 
   -- * Support for runPipe in the main process
   , Verbosity(..)
@@ -45,9 +47,16 @@ import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
 import Data.Ord
+import DynFlags hiding (initDynFlags)
+import HeaderInfo (getOptions)
+import HscTypes (handleSourceError)
 import GHC.IO.Exception (IOErrorType(..))
+import GHC.LanguageExtensions.Type (Extension(..))
+import Panic (handleGhcException)
+import StringBuffer (stringToStringBuffer)
 import System.IO
 import System.IO.Error (mkIOError)
+import System.IO.Extra
 
 import Debug.Trace
 
@@ -649,3 +658,33 @@ doRename ss = everywhere (mkT rename)
           (s, n) = (GHC.occNameString v, GHC.occNameSpace v)
           s' = fromMaybe s (lookup s ss)
 -}
+
+addExtensionsToFlags
+  :: [Extension] -> [Extension] -> FilePath -> DynFlags
+  -> IO (Either String DynFlags)
+addExtensionsToFlags es ds fp flags = catchErrors $ do
+    (stringToStringBuffer -> buf) <- readFileUTF8' fp
+    let opts = getOptions flags buf fp
+        withExts = flip (foldl' xopt_unset) ds
+                      . flip (foldl' xopt_set) es
+                      $ flags
+    (withPragmas, _, _) <- parseDynamicFilePragma withExts opts
+    pure . Right $ withPragmas `gopt_set` Opt_KeepRawTokenStream
+  where
+    catchErrors = handleGhcException (pure . Left . show)
+                . handleSourceError (pure . Left . show)
+
+parseModuleWithArgs
+  :: ([Extension], [Extension])
+  -> FilePath
+  -> IO (Either Errors (Anns, GHC.ParsedSource))
+parseModuleWithArgs (es, ds) fp = ghcWrapper $ do
+  initFlags <- initDynFlags fp
+  eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
+  case eflags of
+    -- TODO: report error properly.
+    Left err -> pure . Left $ mkErr initFlags (UnhelpfulSpan mempty) err
+    Right flags -> do
+      _ <- GHC.setSessionDynFlags flags
+      res <- parseModuleApiAnnsWithCppInternal defaultCppOptions flags fp
+      pure $ postParseTransform res rigidLayout
