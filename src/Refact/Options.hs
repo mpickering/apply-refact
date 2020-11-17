@@ -13,6 +13,10 @@ import Text.Read (readMaybe)
 
 import Refact.Internal (Verbosity(..))
 
+#if __GLASGOW_HASKELL__ <= 806
+type MonadFail = Monad
+#endif
+
 data Options = Options
   { optionsTarget   :: Maybe FilePath -- ^ Where to process hints
   , optionsRefactFile :: Maybe FilePath -- ^ The refactorings to process

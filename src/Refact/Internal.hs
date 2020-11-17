@@ -93,6 +93,16 @@ onError :: String -> Errors -> a
 onError _ = error . show
 #endif
 
+#if __GLASGOW_HASKELL__ <= 806
+composeSrcSpan :: a -> a
+composeSrcSpan = id
+
+decomposeSrcSpan :: a -> a
+decomposeSrcSpan = id
+
+type SrcSpanLess a = a
+#endif
+
 -- library access to perform the substitutions
 
 refactOptions :: PrintOptions Identity String
@@ -385,6 +395,15 @@ insertComment k s as =
 
 
 -- Substitute the template into the original AST.
+#if __GLASGOW_HASKELL__ <= 806
+doGenReplacement
+  :: forall ast a. (Data ast, Data a)
+  => a
+  -> (GHC.Located ast -> Bool)
+  -> GHC.Located ast
+  -> GHC.Located ast
+  -> StateT (Anns, Bool) IO (GHC.Located ast)
+#else
 doGenReplacement
   :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
   => a
@@ -392,6 +411,7 @@ doGenReplacement
   -> ast
   -> ast
   -> StateT (Anns, Bool) IO ast
+#endif
 doGenReplacement m p new old
   | p old = do
       anns <- gets fst
@@ -511,6 +531,15 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newMG = origMG{mg_alts = L locMG [L locMatch newMatch]}
     newBind = origBind{fun_matches = newMG}
 
+#if __GLASGOW_HASKELL__ <= 806
+replaceWorker :: (Annotate a, Data mod)
+              => Anns
+              -> mod
+              -> Parser (GHC.Located a)
+              -> Int
+              -> Refactoring SrcSpan
+              -> IO (Anns, mod)
+#else
 replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               => Anns
               -> mod
@@ -518,6 +547,7 @@ replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               -> Int
               -> Refactoring SrcSpan
               -> IO (Anns, mod)
+#endif
 replaceWorker as m parser seed Replace{..} = do
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
