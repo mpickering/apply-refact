@@ -90,7 +90,7 @@ runPipe Options{..} file = do
     (as, m) <- either (onError "runPipe") (uncurry applyFixities)
                 =<< parseModuleWithArgs (enabledExts, disabledExts) file
     when optionsDebug (putStrLn (showAnnData as 0 m))
-    apply optionsPos optionsStep inp file verb as m
+    apply optionsPos optionsStep inp (Just file) verb as m
 
   if optionsInplace && isJust optionsTarget
     then writeFileUTF8 file output

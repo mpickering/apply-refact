@@ -2,17 +2,20 @@
 
 module Refact.Apply
   ( applyRefactorings
+  , applyRefactorings'
   , runRefactoring
   , parseExtensions
   ) where
 
 import Control.Monad (unless)
 import Data.List (intercalate)
-import Refact.Fixity
+import Language.Haskell.GHC.ExactPrint.Types (Anns)
+import Refact.Fixity (applyFixities)
 import Refact.Internal
-import Refact.Types
+import Refact.Types (Refactoring, SrcSpan)
+import Refact.Utils (Module)
 
--- | Apply a set of refactorings as supplied by hlint
+-- | Apply a set of refactorings as supplied by HLint
 applyRefactorings
   :: Maybe (Int, Int)
   -- ^ Apply hints relevant to a specific position
@@ -39,4 +42,16 @@ applyRefactorings optionsPos inp file exts = do
   unless (null invalid) . fail $ "Unsupported extensions: " ++ intercalate ", " invalid
   (as, m) <- either (onError "apply") (uncurry applyFixities)
               =<< parseModuleWithArgs (enabled, disabled) file
-  apply optionsPos False ((mempty,) <$> inp) file Silent as m
+  apply optionsPos False ((mempty,) <$> inp) (Just file) Silent as m
+
+-- | Like 'applyRefactorings', but takes a parsed module rather than a file path to parse.
+applyRefactorings'
+  :: Maybe (Int, Int)
+  -> [[Refactoring SrcSpan]]
+  -> Anns
+  -- ^ ghc-exactprint AST annotations. This can be obtained from
+  -- 'Language.Haskell.GHC.ExactPrint.Parsers.postParseTransform'.
+  -> Module
+  -- ^ Parsed module
+  -> IO String
+applyRefactorings' optionsPos inp = apply optionsPos False ((mempty,) <$> inp) Nothing Silent
