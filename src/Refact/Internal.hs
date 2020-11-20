@@ -49,6 +49,7 @@ import Data.Maybe
 import Data.List
 import Data.Ord
 import DynFlags hiding (initDynFlags)
+import FastString (unpackFS)
 import HeaderInfo (getOptions)
 import HscTypes (handleSourceError)
 import GHC.IO.Exception (IOErrorType(..))
@@ -82,7 +83,7 @@ import qualified RdrName as GHC
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, setSrcSpanFile)
+                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, toGhcSrcSpan', setSrcSpanFile)
 
 #if __GLASGOW_HASKELL__ >= 810
 type Errors = ErrorMessages
@@ -117,14 +118,22 @@ apply
   :: Maybe (Int, Int)
   -> Bool
   -> [(String, [Refactoring R.SrcSpan])]
-  -> FilePath
+  -> Maybe FilePath
   -> Verbosity
   -> Anns
   -> Module
   -> IO String
-apply mpos step inp file verb as0 m0 = do
+apply mpos step inp mbfile verb as0 m0 = do
+  toGhcSS <-
+    maybe
+      ( case getLoc m0 of
+          UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ unpackFS s
+          RealSrcSpan s -> pure $ toGhcSrcSpan' (srcSpanFile s)
+      )
+      (pure . toGhcSrcSpan)
+      mbfile
   let noOverlapInp = removeOverlap verb inp
-      allRefacts = (fmap . fmap . fmap) (toGhcSrcSpan file) <$> noOverlapInp
+      allRefacts = (fmap . fmap . fmap) toGhcSS <$> noOverlapInp
 
       posFilter (_, rs) =
         case mpos of

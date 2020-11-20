@@ -23,6 +23,7 @@ module Refact.Utils ( -- * Synonyms
                     , modifyAnnKey
                     , replaceAnnKey
                     , toGhcSrcSpan
+                    , toGhcSrcSpan'
                     , setSrcSpanFile
                     , findParent
 
@@ -189,12 +190,15 @@ replaceAnnKey :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Anns
 replaceAnnKey old new inp deltainfo a =
   fromMaybe a (replace old new inp deltainfo a)
 
-
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
-toGhcSrcSpan file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
+toGhcSrcSpan = toGhcSrcSpan' . GHC.mkFastString
+
+-- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
+toGhcSrcSpan' :: FastString -> R.SrcSpan -> SrcSpan
+toGhcSrcSpan' file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
   where
-    f = mkSrcLoc (GHC.mkFastString file)
+    f = mkSrcLoc file
 
 setSrcSpanFile :: FastString -> SrcSpan -> SrcSpan
 setSrcSpanFile file s
