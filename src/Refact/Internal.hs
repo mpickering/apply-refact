@@ -1,4 +1,3 @@
-{-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE FlexibleContexts #-}
@@ -19,22 +18,12 @@ module Refact.Internal
   -- * Support for runPipe in the main process
   , Verbosity(..)
   , rigidLayout
-  , removeOverlap
   , refactOptions
   , type Errors
   , onError
   , mkErr
   )  where
 
-import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Annotate
-import Language.Haskell.GHC.ExactPrint.Delta
-import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.Haskell.GHC.ExactPrint.Print
-import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
-import Language.Haskell.GHC.ExactPrint.Utils
-
-import Control.Arrow
 import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO(..))
@@ -42,22 +31,31 @@ import Control.Monad.Trans.Maybe (MaybeT(..))
 import Control.Monad.Trans.State
 import Data.Char (isAlphaNum)
 import Data.Data
+import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity(..))
 import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something)
-import Data.Generics.Uniplate.Data (transformBi, transformBiM)
+import Data.Generics.Uniplate.Data (transformBi, transformBiM, universeBi)
 import qualified Data.Map as Map
-import Data.Maybe
-import Data.List
-import Data.Ord
+import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
+import Data.List.Extra
+import Data.Ord (comparing)
+import qualified Data.Set as Set
+import Data.Tuple.Extra
 import DynFlags hiding (initDynFlags)
 import FastString (unpackFS)
 import HeaderInfo (getOptions)
 import HscTypes (handleSourceError)
 import GHC.IO.Exception (IOErrorType(..))
 import GHC.LanguageExtensions.Type (Extension(..))
+import Language.Haskell.GHC.ExactPrint
+import Language.Haskell.GHC.ExactPrint.Annotate
+import Language.Haskell.GHC.ExactPrint.Delta
+import Language.Haskell.GHC.ExactPrint.Parsers
+import Language.Haskell.GHC.ExactPrint.Print
+import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
+import Language.Haskell.GHC.ExactPrint.Utils
 import Panic (handleGhcException)
 import StringBuffer (stringToStringBuffer)
-import System.IO
 import System.IO.Error (mkIOError)
 import System.IO.Extra
 
@@ -76,7 +74,7 @@ import HsSyn hiding (Pat, Stmt, noExt)
 #endif
 
 import Outputable hiding ((<>))
-import SrcLoc
+import SrcLoc hiding (spans)
 import qualified GHC hiding (parseModule)
 import qualified Name as GHC
 import qualified RdrName as GHC
@@ -133,51 +131,123 @@ apply mpos step inp mbfile verb as0 m0 = do
       )
       (pure . toGhcSrcSpan)
       mbfile
-  let noOverlapInp = removeOverlap verb inp
-      allRefacts = (fmap . fmap . fmap) toGhcSS <$> noOverlapInp
+  let allRefacts :: [((String, [Refactoring SrcSpan]), R.SrcSpan)]
+      allRefacts =
+        sortBy cmpSrcSpan
+        . map (first . second . map . fmap $ toGhcSS)
+        . mapMaybe (sequenceA . (id &&& aggregateSrcSpans . map pos . snd))
+        . filter (maybe (const True) (\p -> any ((`spans` p) . pos) . snd) mpos)
+        $ inp
 
-      posFilter (_, rs) =
-        case mpos of
-          Nothing -> True
-          Just p  -> any (flip spans p . pos) rs
-      filtRefacts = filter posFilter allRefacts
-      refacts = concatMap snd filtRefacts
+      cmpSrcSpan (_, s1) (_, s2) =
+        comparing startLine s1 s2 <> -- s1 first if it starts on earlier line
+        comparing startCol s1 s2 <>  --             or on earlier column
+        comparing endLine s2 s1 <>   -- they start in same place, s2 comes
+        comparing endCol s2 s1       -- first if it ends later
+        -- else, completely same span, so s1 will be first
 
-  when (verb >= Normal) (traceM $ "Applying " ++ show (length refacts) ++ " hints")
-  when (verb == Loud) (traceM $ show filtRefacts)
+  when (verb >= Normal) . traceM $
+    "Applying " ++ (show . sum . map (length . snd . fst) $ allRefacts) ++ " hints"
+  when (verb == Loud) . traceM $ show (map fst allRefacts)
 
-  -- need a check here to avoid overlap
   (as, m) <- if step
-               then fromMaybe (as0, m0) <$> runMaybeT (refactoringLoop as0 m0 filtRefacts)
-               else flip evalStateT 0 $
-                      foldM (uncurry runRefactoring) (as0, m0) refacts
+               then fromMaybe (as0, m0) <$> runMaybeT (refactoringLoop as0 m0 allRefacts)
+               else evalStateT (runRefactorings verb as0 m0 (first snd <$> allRefacts)) 0
   pure . runIdentity $ exactPrintWithOptions refactOptions m as
 
-data LoopOption = LoopOption
-                    { desc :: String
-                    , perform :: MaybeT IO (Anns, Module) }
+spans :: R.SrcSpan -> (Int, Int) -> Bool
+spans R.SrcSpan{..} loc = (startLine, startCol) <= loc && loc <= (endLine, endCol)
 
-refactoringLoop :: Anns -> Module -> [(String, [Refactoring SrcSpan])]
-                -> MaybeT IO (Anns, Module)
+aggregateSrcSpans :: [R.SrcSpan] -> Maybe R.SrcSpan
+aggregateSrcSpans = \case
+  [] -> Nothing
+  rs -> Just (foldr1 alg rs)
+  where
+    alg (R.SrcSpan sl1 sc1 el1 ec1) (R.SrcSpan sl2 sc2 el2 ec2) =
+      let (sl, sc) = case compare sl1 sl2 of
+                      LT -> (sl1, sc1)
+                      EQ -> (sl1, min sc1 sc2)
+                      GT -> (sl2, sc2)
+          (el, ec) = case compare el1 el2 of
+                      LT -> (el2, ec2)
+                      EQ -> (el2, max ec1 ec2)
+                      GT -> (el1, ec1)
+       in R.SrcSpan sl sc el ec
+
+runRefactorings
+  :: Verbosity
+  -> Anns
+  -> Module
+  -> [([Refactoring SrcSpan], R.SrcSpan)]
+  -> StateT Int IO (Anns, Module)
+runRefactorings verb as0 m0 ((rs, ss) : rest) = do
+  runRefactorings' verb as0 m0 rs >>= \case
+    Nothing -> runRefactorings verb as0 m0 rest
+    Just (as, m) -> do
+      let (overlaps, rest') = span (overlap ss . snd) rest
+      when (verb >= Normal) . for_ overlaps $ \(rs', _) ->
+        traceM $ "Ignoring " ++ show rs' ++ " due to overlap."
+      runRefactorings verb as m rest'
+runRefactorings _ as m [] = pure (as, m)
+
+runRefactorings'
+  :: Verbosity
+  -> Anns
+  -> Module
+  -> [Refactoring SrcSpan]
+  -> StateT Int IO (Maybe (Anns, Module))
+runRefactorings' verb as0 m0 rs = do
+  seed <- get
+  (as, m) <- foldlM (uncurry runRefactoring) (as0, m0) rs
+  if droppedComments as m
+    then
+      do
+        put seed
+        when (verb >= Normal) . traceM $
+          "Ignoring " ++ show rs ++ " since applying them would cause comments to be dropped."
+        pure Nothing
+    else pure $ Just (as, m)
+
+overlap :: R.SrcSpan -> R.SrcSpan -> Bool
+overlap s1 s2 =
+  -- We know s1 always starts <= s2, due to our sort
+  case compare (startLine s2) (endLine s1) of
+    LT -> True
+    EQ -> startCol s2 <= endCol s1
+    GT -> False
+
+data LoopOption = LoopOption
+  { desc    :: String
+  , perform :: MaybeT IO (Anns, Module)
+  }
+
+refactoringLoop
+  :: Anns
+  -> Module
+  -> [((String, [Refactoring SrcSpan]), R.SrcSpan)]
+  -> MaybeT IO (Anns, Module)
 refactoringLoop as m [] = pure (as, m)
-refactoringLoop as m ((_, []): rs) = refactoringLoop as m rs
-refactoringLoop as m hints@((hintDesc, rs): rss) = do
-    -- Force to force bottoms
-    (!r1, !r2) <- liftIO $ flip evalStateT 0 $ foldM (uncurry runRefactoring) (as, m) rs
-    let yAction = do
-          exactPrint r2 r1 `seq` pure ()
-          refactoringLoop r1 r2 rss
+refactoringLoop as m (((_, []), _): rs) = refactoringLoop as m rs
+refactoringLoop as0 m0 hints@(((hintDesc, rs), ss): rss) = do
+    res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent as0 m0 rs
+    let yAction = case res of
+          Just (as, m) -> do
+            exactPrint m as `seq` pure ()
+            refactoringLoop as m $ dropWhile (overlap ss . snd) rss
+          Nothing -> do
+            liftIO $ putStrLn "Hint skipped since applying it would cause comments to be dropped"
+            refactoringLoop as0 m0 rss
         opts =
           [ ("y", LoopOption "Apply current hint" yAction)
-          , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as m rss))
-          , ("q", LoopOption "Apply no further hints" (pure (as, m)))
+          , ("n", LoopOption "Don't apply the current hint" (refactoringLoop as0 m0 rss))
+          , ("q", LoopOption "Apply no further hints" (pure (as0, m0)))
           , ("d", LoopOption "Discard previous changes" mzero )
-          , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m as))
-                                                  >> refactoringLoop as m hints))
+          , ("v", LoopOption "View current file" (liftIO (putStrLn (exactPrint m0 as0))
+                                                  >> refactoringLoop as0 m0 hints))
           , ("?", LoopOption "Show this help menu" loopHelp)]
         loopHelp = do
-                liftIO . putStrLn . unlines . map mkLine $ opts
-                refactoringLoop as m hints
+          liftIO . putStrLn . unlines . map mkLine $ opts
+          refactoringLoop as0 m0 hints
         mkLine (c, opt) = c ++ " - " ++ desc opt
     inp <- liftIO $ do
       putStrLn hintDesc
@@ -188,75 +258,27 @@ refactoringLoop as m hints@((hintDesc, rs): rss) = do
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
--- Filters out overlapping ideas, picking the first idea in a set of overlapping ideas.
--- If two ideas start in the exact same place, pick the largest edit.
-removeOverlap :: Verbosity -> [(String, [Refactoring R.SrcSpan])] -> [(String, [Refactoring R.SrcSpan])]
-removeOverlap verb = dropOverlapping . sortBy f . summarize
-  where
-    -- We want to consider all Refactorings of a single idea as a unit, so compute a summary
-    -- SrcSpan that encompasses all the Refactorings within each idea.
-    summarize :: [(String, [Refactoring R.SrcSpan])] -> [(String, (R.SrcSpan, [Refactoring R.SrcSpan]))]
-    summarize ideas = [ (s, (foldr1 summary (map pos rs), rs)) | (s, rs) <- ideas, not (null rs) ]
-
-    summary (R.SrcSpan sl1 sc1 el1 ec1)
-            (R.SrcSpan sl2 sc2 el2 ec2) =
-      let (sl, sc) = case compare sl1 sl2 of
-                      LT -> (sl1, sc1)
-                      EQ -> (sl1, min sc1 sc2)
-                      GT -> (sl2, sc2)
-          (el, ec) = case compare el1 el2 of
-                      LT -> (el2, ec2)
-                      EQ -> (el2, max ec1 ec2)
-                      GT -> (el1, ec1)
-      in R.SrcSpan sl sc el ec
-
-    -- Order by span start. If starting in same place, order by size.
-    f (_,(s1,_)) (_,(s2,_)) =
-      comparing startLine s1 s2 <> -- s1 first if it starts on earlier line
-      comparing startCol s1 s2 <>  --             or on earlier column
-      comparing endLine s2 s1 <>   -- they start in same place, s2 comes
-      comparing endCol s2 s1       -- first if it ends later
-      -- else, completely same span, so s1 will be first
-
-    dropOverlapping [] = []
-    dropOverlapping (p:ps) = go p ps
-    go (s,(_,rs)) [] = [(s,rs)]
-    go p@(s,(_,rs)) (x:xs)
-      | p `overlaps` x = (if verb > Silent
-                          then trace ("Ignoring " ++ show (snd (snd x)) ++ " due to overlap.")
-                          else id) go p xs
-      | otherwise = (s,rs) : go x xs
-    -- for overlaps, we know s1 always starts <= s2, due to our sort
-    overlaps (_,(s1,_)) (_,(s2,_)) =
-      case compare (startLine s2) (endLine s1) of
-        LT -> True
-        EQ -> startCol s2 <= endCol s1
-        GT -> False
-
 -- ---------------------------------------------------------------------
 
 -- Perform the substitutions
 
-getSeed :: Monad m => StateT Int m Int
-getSeed = get <* modify (+1)
-
 -- | Peform a @Refactoring@.
 runRefactoring :: Data a => Anns -> a -> Refactoring SrcSpan -> StateT Int IO (Anns, a)
-runRefactoring as m r@Replace{} = do
-  seed <- getSeed
-  liftIO $ case rtype r of
-    Expr -> replaceWorker as m parseExpr seed r
-    Decl -> replaceWorker as m parseDecl seed r
-    Type -> replaceWorker as m parseType seed r
-    Pattern -> replaceWorker as m parsePattern seed r
-    Stmt -> replaceWorker as m parseStmt seed r
-    Bind -> replaceWorker as m parseBind seed r
-    R.Match ->  replaceWorker as m parseMatch seed r
-    ModuleName -> replaceWorker as m (parseModuleName (pos r)) seed r
-    Import -> replaceWorker as m parseImport seed r
+runRefactoring as m = \case
+  r@Replace{} -> do
+    seed <- get <* modify (+1)
+    liftIO $ case rtype r of
+      Expr -> replaceWorker as m parseExpr seed r
+      Decl -> replaceWorker as m parseDecl seed r
+      Type -> replaceWorker as m parseType seed r
+      Pattern -> replaceWorker as m parsePattern seed r
+      Stmt -> replaceWorker as m parseStmt seed r
+      Bind -> replaceWorker as m parseBind seed r
+      R.Match ->  replaceWorker as m parseMatch seed r
+      ModuleName -> replaceWorker as m (parseModuleName (pos r)) seed r
+      Import -> replaceWorker as m parseImport seed r
 
-runRefactoring as m ModifyComment{..} =
-    pure (Map.map go as, m)
+  ModifyComment{..} -> pure (Map.map go as, m)
     where
       go a@Ann{ annPriorComments, annsDP } =
         a { annsDP = map changeComment annsDP
@@ -266,26 +288,34 @@ runRefactoring as m ModifyComment{..} =
       change old@Comment{..}= if ss2pos commentIdentifier == ss2pos pos
                                           then old { commentContents = newComment}
                                           else old
-runRefactoring as m Delete{rtype, pos} = do
-  let f = case rtype of
-            Stmt -> doDeleteStmt ((/= pos) . getLoc)
-            Import -> doDeleteImport ((/= pos) . getLoc)
-            _ -> id
-  pure (as, f m)
-  {-
-runRefactoring as m Rename{nameSubts} = (as, m)
-  --(as, doRename nameSubts m)
- -}
-runRefactoring as m InsertComment{..} = do
-  exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m pos
-  pure (insertComment exprkey newComment as, m)
-runRefactoring as m RemoveAsKeyword{..} =
-  pure (as, removeAsKeyword m)
+  Delete{rtype, pos} -> pure (as, f m)
+    where
+      f = case rtype of
+        Stmt -> doDeleteStmt ((/= pos) . getLoc)
+        Import -> doDeleteImport ((/= pos) . getLoc)
+        _ -> id
+
+  InsertComment{..} -> do
+    exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m pos
+    pure (insertComment exprkey newComment as, m)
+
+  RemoveAsKeyword{..} -> pure (as, removeAsKeyword m)
+    where
+      removeAsKeyword = transformBi go
+      go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
+      go imp@(GHC.L l i)
+        | l == pos = GHC.L l (i { ideclAs = Nothing })
+        | otherwise =  imp
+
+droppedComments :: Anns -> Module -> Bool
+droppedComments as m = any (`Set.notMember` allSpans) spansWithComments
   where
-    removeAsKeyword = transformBi go
-    go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
-    go imp@(GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
-                    | otherwise =  imp
+    spansWithComments =
+      map ((\(AnnKey ss _) -> ss) . fst)
+      . filter (\(_, v) -> notNull (annPriorComments v) || notNull (annFollowingComments v))
+      $ Map.toList as
+
+    allSpans = Set.fromList (universeBi m)
 
 -- Specialised parsers
 mkErr :: GHC.DynFlags -> SrcSpan -> String -> Errors
