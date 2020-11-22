@@ -1,0 +1,2 @@
+-- input
+foo =  {- comment attached to x -}x >>= g . f

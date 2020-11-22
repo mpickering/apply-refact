@@ -1,0 +1,6 @@
+bar x y =
+  -- a comment
+  if isJust x then "1"
+  else if Prelude.null (y) then "2"
+  -- another comment
+  else "3"
