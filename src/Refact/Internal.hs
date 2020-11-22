@@ -43,7 +43,8 @@ import Control.Monad.Trans.State
 import Data.Char (isAlphaNum)
 import Data.Data
 import Data.Functor.Identity (Identity(..))
-import Data.Generics hiding (GT)
+import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something)
+import Data.Generics.Uniplate.Data (transformBi, transformBiM)
 import qualified Data.Map as Map
 import Data.Maybe
 import Data.List
@@ -281,7 +282,7 @@ runRefactoring as m InsertComment{..} = do
 runRefactoring as m RemoveAsKeyword{..} =
   pure (as, removeAsKeyword m)
   where
-    removeAsKeyword = everywhere (mkT go)
+    removeAsKeyword = transformBi go
     go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
     go imp@(GHC.L l i)  | l == pos = GHC.L l (i { ideclAs = Nothing })
                     | otherwise =  imp
@@ -443,7 +444,7 @@ doGenReplacement m p new old
           o = decomposeSrcSpan old
       intAnns <- liftIO $ execStateT (modifyAnnKey m o n) anns
       let newFile = srcSpanFile newLocReal
-          newLocal = everywhere (mkT $ setSrcSpanFile newFile) oldLocal
+          newLocal = transformBi (setSrcSpanFile newFile) oldLocal
           newLocalLoc = getLoc newLocal
           ensureLoc = combineSrcSpans newLocalLoc
           newMG = fun_matches newBind
@@ -595,7 +596,7 @@ replaceWorker as m parser seed Replace{..} = do
             else ann
 
       replacementPred (GHC.L l _) = l == replExprLocation
-      transformation = everywhereM (mkM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr))
+      transformation = transformBiM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr)
   runStateT (transformation m) (newAnns, False) >>= \case
     (finalM, (finalAs, True)) -> pure (ensureSpace finalAs, finalM)
     -- Failed to find a replacment so don't make any changes
@@ -651,10 +652,10 @@ findOrError m = either f pure . findInModule m
 -- Deletion from a list
 
 doDeleteStmt :: Data a => (Stmt -> Bool) -> a -> a
-doDeleteStmt p = everywhere (mkT (filter p))
+doDeleteStmt = transformBi . filter
 
 doDeleteImport :: Data a => (Import -> Bool) -> a -> a
-doDeleteImport p = everywhere (mkT (filter p))
+doDeleteImport = transformBi . filter
 
 {-
 -- Renaming
