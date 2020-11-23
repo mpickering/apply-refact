@@ -22,7 +22,7 @@ main =
 testDir = "tests/examples"
 
 expectedFailures :: [FilePath]
-expectedFailures = map (testDir </>) []
+expectedFailures = map (testDir </>) ["lambda42.hs"]
 
 findTests :: IO [FilePath]
 findTests = findByExtension [".hs"] testDir
