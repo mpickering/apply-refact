@@ -1,3 +1,12 @@
+  
+  * #101, do not apply a refactoring if it drops comments
+  * #100, add applyRefactorings', which is like applyRefactoring, but takes a parsed module and annotations, rather than a FilePath to parse
+  * #98, make applyRefactoring take a list of GHC extensions
+  * #97, fix a bug where backquotes surrounding substitution variables are dropped after substitution
+  * #85, show actual type (if any) if expected type is not found
+  * #84, improve error message of findGen
+  * #81, remove hint description from the input of applyRefactorings
+  * #79, improve error message when neither target nor refact file is specified
   * #78, remove some exported functions in Refact.Apply that are only relevant to runPipe
 
 v0.8.2.1
