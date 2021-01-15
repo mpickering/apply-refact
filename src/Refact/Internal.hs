@@ -39,6 +39,7 @@ import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.List.Extra
 import Data.Ord (comparing)
+import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple.Extra
 import DynFlags hiding (initDynFlags)
@@ -81,7 +82,7 @@ import qualified RdrName as GHC
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind
+import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind, AnnKeyMap
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, toGhcSrcSpan', setSrcSpanFile)
 
 #if __GLASGOW_HASKELL__ >= 810
@@ -198,8 +199,8 @@ runRefactorings'
   -> StateT Int IO (Maybe (Anns, Module))
 runRefactorings' verb as0 m0 rs = do
   seed <- get
-  (as, m) <- foldlM (uncurry runRefactoring) (as0, m0) rs
-  if droppedComments as m
+  (as, m, keyMap) <- foldlM (uncurry3 runRefactoring) (as0, m0, Map.empty) rs
+  if droppedComments as m keyMap
     then
       do
         put seed
@@ -263,22 +264,28 @@ data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 -- Perform the substitutions
 
 -- | Peform a @Refactoring@.
-runRefactoring :: Data a => Anns -> a -> Refactoring SrcSpan -> StateT Int IO (Anns, a)
-runRefactoring as m = \case
+runRefactoring
+  :: Data a
+  => Anns
+  -> a
+  -> AnnKeyMap
+  -> Refactoring SrcSpan
+  -> StateT Int IO (Anns, a, AnnKeyMap)
+runRefactoring as m keyMap = \case
   r@Replace{} -> do
     seed <- get <* modify (+1)
     liftIO $ case rtype r of
-      Expr -> replaceWorker as m parseExpr seed r
-      Decl -> replaceWorker as m parseDecl seed r
-      Type -> replaceWorker as m parseType seed r
-      Pattern -> replaceWorker as m parsePattern seed r
-      Stmt -> replaceWorker as m parseStmt seed r
-      Bind -> replaceWorker as m parseBind seed r
-      R.Match ->  replaceWorker as m parseMatch seed r
-      ModuleName -> replaceWorker as m (parseModuleName (pos r)) seed r
-      Import -> replaceWorker as m parseImport seed r
+      Expr -> replaceWorker as m keyMap parseExpr seed r
+      Decl -> replaceWorker as m keyMap parseDecl seed r
+      Type -> replaceWorker as m keyMap parseType seed r
+      Pattern -> replaceWorker as m keyMap parsePattern seed r
+      Stmt -> replaceWorker as m keyMap parseStmt seed r
+      Bind -> replaceWorker as m keyMap parseBind seed r
+      R.Match ->  replaceWorker as m keyMap parseMatch seed r
+      ModuleName -> replaceWorker as m keyMap (parseModuleName (pos r)) seed r
+      Import -> replaceWorker as m keyMap parseImport seed r
 
-  ModifyComment{..} -> pure (Map.map go as, m)
+  ModifyComment{..} -> pure (Map.map go as, m, keyMap)
     where
       go a@Ann{ annPriorComments, annsDP } =
         a { annsDP = map changeComment annsDP
@@ -288,7 +295,7 @@ runRefactoring as m = \case
       change old@Comment{..}= if ss2pos commentIdentifier == ss2pos pos
                                           then old { commentContents = newComment}
                                           else old
-  Delete{rtype, pos} -> pure (as, f m)
+  Delete{rtype, pos} -> pure (as, f m, keyMap)
     where
       f = case rtype of
         Stmt -> doDeleteStmt ((/= pos) . getLoc)
@@ -297,9 +304,9 @@ runRefactoring as m = \case
 
   InsertComment{..} -> do
     exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m pos
-    pure (insertComment exprkey newComment as, m)
+    pure (insertComment exprkey newComment as, m, keyMap)
 
-  RemoveAsKeyword{..} -> pure (as, removeAsKeyword m)
+  RemoveAsKeyword{..} -> pure (as, removeAsKeyword m, keyMap)
     where
       removeAsKeyword = transformBi go
       go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
@@ -307,14 +314,17 @@ runRefactoring as m = \case
         | l == pos = GHC.L l (i { ideclAs = Nothing })
         | otherwise =  imp
 
-droppedComments :: Anns -> Module -> Bool
-droppedComments as m = any (`Set.notMember` allSpans) spansWithComments
+droppedComments :: Anns -> Module -> AnnKeyMap -> Bool
+droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithComments
   where
-    spansWithComments =
-      map ((\(AnnKey ss _) -> ss) . fst)
+    spanssWithComments =
+      map (\(key, _) -> map keySpan $ key : Map.findWithDefault [] key keyMap)
       . filter (\(_, v) -> notNull (annPriorComments v) || notNull (annFollowingComments v))
       $ Map.toList as
 
+    keySpan (AnnKey ss _) = ss
+
+    allSpans :: Set SrcSpan
     allSpans = Set.fromList (universeBi m)
 
 -- Specialised parsers
@@ -395,7 +405,8 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
           fakeExpr = GHC.L (getLoc new) (GHC.VarPat noExt new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
-      modify (replaceAnnKey (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr))
+      modify . first $
+        replaceAnnKey (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr)
       pure $ GHC.FunRhs new b s
     subst o _ = pure o
 identSub _ _ e = pure e
@@ -443,7 +454,7 @@ doGenReplacement
   -> (GHC.Located ast -> Bool)
   -> GHC.Located ast
   -> GHC.Located ast
-  -> StateT (Anns, Bool) IO (GHC.Located ast)
+  -> StateT ((Anns, AnnKeyMap), Bool) IO (GHC.Located ast)
 #else
 doGenReplacement
   :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
@@ -451,15 +462,15 @@ doGenReplacement
   -> (ast -> Bool)
   -> ast
   -> ast
-  -> StateT (Anns, Bool) IO ast
+  -> StateT ((Anns, AnnKeyMap), Bool) IO ast
 #endif
 doGenReplacement m p new old
   | p old = do
-      anns <- gets fst
+      (anns, keyMap) <- gets fst
       let n = decomposeSrcSpan new
           o = decomposeSrcSpan old
-      newAnns <- liftIO $ execStateT (modifyAnnKey m o n) anns
-      put (newAnns, True)
+      (newAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
+      put ((newAnns, newKeyMap), True)
       pure new
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
   -- run the replacement on "f a = body", and add "local" back afterwards.
@@ -469,10 +480,10 @@ doGenReplacement m p new old
   , Just (oldNoLocal, oldLocal) <- stripLocalBind (decomposeSrcSpan old)
   , newLoc@(RealSrcSpan newLocReal) <- getLoc new
   , p (composeSrcSpan oldNoLocal) = do
-      anns <- gets fst
+      (anns, keyMap) <- gets fst
       let n = decomposeSrcSpan new
           o = decomposeSrcSpan old
-      intAnns <- liftIO $ execStateT (modifyAnnKey m o n) anns
+      (intAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
       let newFile = srcSpanFile newLocReal
           newLocal = transformBi (setSrcSpanFile newFile) oldLocal
           newLocalLoc = getLoc newLocal
@@ -530,7 +541,7 @@ doGenReplacement m p new old
                 other -> other
 
           newAnns = addLocalBindsToAnns intAnns
-      put (newAnns, True)
+      put ((newAnns, newKeyMap), True)
       pure $ composeSrcSpan newWithLocalBinds
   | otherwise = pure old
 
@@ -576,27 +587,32 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
 replaceWorker :: (Annotate a, Data mod)
               => Anns
               -> mod
+              -> AnnKeyMap
               -> Parser (GHC.Located a)
               -> Int
               -> Refactoring SrcSpan
-              -> IO (Anns, mod)
+              -> IO (Anns, mod, AnnKeyMap)
 #else
 replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               => Anns
               -> mod
+              -> AnnKeyMap
               -> Parser a
               -> Int
               -> Refactoring SrcSpan
-              -> IO (Anns, mod)
+              -> IO (Anns, mod, AnnKeyMap)
 #endif
-replaceWorker as m parser seed Replace{..} = do
+replaceWorker as m keyMap parser seed Replace{..} = do
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
 
   (relat, template) <- withDynFlags (\d -> parser d uniqueName orig) >>=
     either (onError "replaceWorked") pure
 
-  (newExpr, newAnns) <- runStateT (substTransform m subts template) (mergeAnns as relat)
+  (newExpr, (newAnns, newKeyMap)) <-
+    runStateT
+      (substTransform m subts template)
+      (mergeAnns as relat, keyMap)
   let lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
       adjacent _ _ = False
@@ -627,11 +643,11 @@ replaceWorker as m parser seed Replace{..} = do
 
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = transformBiM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr)
-  runStateT (transformation m) (newAnns, False) >>= \case
-    (finalM, (finalAs, True)) -> pure (ensureSpace finalAs, finalM)
+  runStateT (transformation m) ((newAnns, newKeyMap), False) >>= \case
+    (finalM, ((finalAs, finalKeyMap), True)) -> pure (ensureSpace finalAs, finalM, finalKeyMap)
     -- Failed to find a replacment so don't make any changes
-    _ -> pure (as, m)
-replaceWorker as m _ _ _  = pure (as, m)
+    _ -> pure (as, m, keyMap)
+replaceWorker as m keyMap _ _ _ = pure (as, m, keyMap)
 
 data NotFound = NotFound
   { nfExpected :: String

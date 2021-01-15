@@ -1,0 +1,1 @@
+[("tests/examples/Comment10.hs:9:70-72: Warning: Redundant bracket\nFound:\n  (1)\nPerhaps:\n  1\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 9, startCol = 70, endLine = 9, endCol = 73}, subts = [("x",SrcSpan {startLine = 9, startCol = 71, endLine = 9, endCol = 72})], orig = "x"}])]
