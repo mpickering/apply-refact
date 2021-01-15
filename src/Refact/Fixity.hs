@@ -32,7 +32,7 @@ import Data.Tuple
 applyFixities :: Anns -> Module -> IO (Anns, Module)
 applyFixities as m = swap <$> runStateT (everywhereM (mkM expFix) m) as
 
-expFix :: LHsExpr GhcPs -> M (LHsExpr GhcPs)
+expFix :: LHsExpr GhcPs -> StateT Anns IO (LHsExpr GhcPs)
 expFix (L loc (OpApp _ l op r)) =
   mkOpAppRn baseFixities loc l op (findFixity baseFixities op) r
 
@@ -48,7 +48,7 @@ getIdent _ = error "Must be HsVar"
 --    from 'e12' to '(e12 `op2` e2)'.
 --  * When rewriting '(- neg_arg) `op` e2' into '- (neg_arg `op` e2)', move the delta position
 --    from 'neg_arg' to '(neg_arg `op` e2)'.
-moveDelta :: Annotation -> AnnKey -> AnnKey -> M ()
+moveDelta :: Annotation -> AnnKey -> AnnKey -> StateT Anns IO ()
 moveDelta oldAnn oldKey newKey = do
   -- If the old annotation has a unary minus operator, add it to the new annotation.
   let newAnnsDP | Just dp <- find ((== G AnnMinus) . fst) (annsDP oldAnn) = [dp]
@@ -71,7 +71,7 @@ mkOpAppRn ::
           -> LHsExpr GhcPs -> Fixity    -- Operator and fixity
           -> LHsExpr GhcPs              -- Right operand (not an OpApp, but might
                                         -- be a NegApp)
-          -> M (LHsExpr GhcPs)
+          -> StateT Anns IO (LHsExpr GhcPs)
 
 -- (e11 `op1` e12) `op2` e2
 mkOpAppRn fs loc e1@(L _ (OpApp x1 e11 op1 e12)) op2 fix2 e2
@@ -108,8 +108,8 @@ mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
           ak  = AnnKey loc (CN "OpApp")
       opAnn <- gets (fromMaybe annNone . Map.lookup ak)
       negAnns <- gets (fromMaybe annNone . Map.lookup (mkAnnKey e1))
-      modify (Map.insert key (annNone { annEntryDelta = annEntryDelta opAnn, annsDP = annsDP negAnns }))
-      modify (Map.delete (mkAnnKey e1))
+      modify $ Map.insert key (annNone { annEntryDelta = annEntryDelta opAnn, annsDP = annsDP negAnns })
+      modify $ Map.delete (mkAnnKey e1)
       return res
 
   where

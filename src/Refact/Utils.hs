@@ -15,6 +15,7 @@ module Refact.Utils ( -- * Synonyms
                     , Type
                     , Import
                     , FunBind
+                    , AnnKeyMap
                     -- * Monad
                     , M
                     -- * Utility
@@ -26,13 +27,14 @@ module Refact.Utils ( -- * Synonyms
                     , toGhcSrcSpan'
                     , setSrcSpanFile
                     , findParent
-
                     ) where
 
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
 
+import Data.Bifunctor (bimap)
 import Data.Data
+import Data.Map.Strict (Map)
 
 import FastString (FastString)
 import SrcLoc
@@ -64,7 +66,9 @@ import Unsafe.Coerce
 
 -- Types
 --
-type M a = StateT Anns IO a
+type M a = StateT (Anns, AnnKeyMap) IO a
+
+type AnnKeyMap = Map AnnKey [AnnKey]
 
 type Module = (GHC.Located (GHC.HsModule GHC.GhcPs))
 
@@ -160,11 +164,15 @@ modifyAnnKey
   :: (Data old, Data new, Data mod)
   => mod -> Located old -> Located new -> M (Located new)
 modifyAnnKey m e1 e2 = do
-  as <- get
+  as <- gets fst
   let parentKey = fromMaybe (mkAnnKey e2) (findParent (getLoc e2) as m)
-  e2 <$ modify ( recoverBackquotes e1 e2
-               . replaceAnnKey (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey
-               )
+  e2 <$ modify
+          ( bimap
+              ( recoverBackquotes e1 e2
+              . replaceAnnKey (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey
+              )
+              (Map.insertWith (++) (mkAnnKey e1) [mkAnnKey e2])
+          )
 
 -- | When the template contains a backquoted substitution variable, but the substitute
 -- is not backquoted, we must add the corresponding 'GHC.AnnBackQuote's.
