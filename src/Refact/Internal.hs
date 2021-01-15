@@ -617,10 +617,16 @@ replaceWorker as m keyMap parser seed Replace{..} = do
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
       adjacent _ _ = False
 
-      -- Ensure that there is a space between two alphanumeric names, otherwise
-      -- 'y = f(x)' would be refactored into 'y = fx'.
-      ensureSpace :: Anns -> Anns
-      ensureSpace = fromMaybe id $ do
+      -- Return @True@ if the start position of the two spans are on the same line, and differ
+      -- by the given number of columns.
+      diffStartCols :: Int -> SrcSpan -> SrcSpan -> Bool
+      diffStartCols x (srcSpanStart -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) =
+        srcLocLine loc1 == srcLocLine loc2 && srcLocCol loc1 - srcLocCol loc2 == x
+      diffStartCols _ _ _ = False
+
+      -- Add a space if needed, so that we avoid refactoring `y = f(x)` into `y = fx`.
+      ensureAppSpace :: Anns -> Anns
+      ensureAppSpace = fromMaybe id $ do
         (L _ (HsVar _ (L _ newName))) :: LHsExpr GhcPs <- cast newExpr
         hd <- listToMaybe $ case newName of
           GHC.Unqual occName -> GHC.occNameString occName
@@ -641,10 +647,35 @@ replaceWorker as m keyMap parser seed Replace{..} = do
             then ann { annEntryDelta = DP (0, 1) }
             else ann
 
+      -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
+      ensureDoSpace :: Anns -> Anns
+      ensureDoSpace = fromMaybe id $ do
+        let doBlocks :: [LHsExpr GhcPs] =
+              listify
+                (\case
+                  (L _ HsDo{}) -> True
+                  _ -> False
+                )
+                m
+            doBlocks' :: [(SrcSpan, Int)]
+            doBlocks' =
+              map
+                ( \case
+                    L loc (HsDo _ MDoExpr _) -> (loc, 3)
+                    L loc _ -> (loc, 2)
+                )
+                doBlocks
+        _ <- find (\(ss, len) -> diffStartCols len pos ss) doBlocks'
+        pure . flip Map.adjust (mkAnnKey newExpr) $ \ann ->
+          if annEntryDelta ann == DP (0, 0)
+            then ann { annEntryDelta = DP (0, 1) }
+            else ann
+
       replacementPred (GHC.L l _) = l == replExprLocation
       transformation = transformBiM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr)
   runStateT (transformation m) ((newAnns, newKeyMap), False) >>= \case
-    (finalM, ((finalAs, finalKeyMap), True)) -> pure (ensureSpace finalAs, finalM, finalKeyMap)
+    (finalM, ((ensureDoSpace . ensureAppSpace -> finalAs, finalKeyMap), True)) ->
+      pure (finalAs, finalM, finalKeyMap)
     -- Failed to find a replacment so don't make any changes
     _ -> pure (as, m, keyMap)
 replaceWorker as m keyMap _ _ _ = pure (as, m, keyMap)
