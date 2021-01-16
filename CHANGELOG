@@ -1,4 +1,7 @@
   
+  * #106, expose Refact.Internal
+  * #104, ensure space between "do" and the next identifier
+  * support GHC 8.10.3
   * #101, do not apply a refactoring if it drops comments
   * #100, add applyRefactorings', which is like applyRefactoring, but takes a parsed module and annotations, rather than a FilePath to parse
   * #98, make applyRefactoring take a list of GHC extensions
