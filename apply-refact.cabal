@@ -29,7 +29,7 @@ library
   exposed-modules:   Refact.Utils
                    , Refact.Apply
                    , Refact.Fixity
-  other-modules: Refact.Internal
+                   , Refact.Internal
   GHC-Options: -Wall
   build-depends: base >=4.12 && < 5
                , refact >= 0.2
