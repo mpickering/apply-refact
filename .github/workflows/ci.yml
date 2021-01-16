@@ -12,12 +12,12 @@ jobs:
     runs-on: ubuntu-20.04
     strategy:
       matrix:
-        ghc: ["8.10.2", "8.8.4", "8.6.5"]
+        ghc: ["8.10.3", "8.8.4", "8.6.5"]
     env:
       CONFIG: "--enable-tests --enable-benchmarks"
     steps:
       - uses: actions/checkout@v2
-      - uses: actions/setup-haskell@v1.1.3
+      - uses: actions/setup-haskell@v1.1.4
         id: setup-haskell-cabal
         with:
           ghc-version: ${{ matrix.ghc }}
