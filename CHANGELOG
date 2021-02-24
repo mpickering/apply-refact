@@ -1,4 +1,6 @@
 
+  * #109, Use the correct DynFlags when parsing refactoring templates
+
 v0.9.0.0
 
   * #106, expose Refact.Internal
