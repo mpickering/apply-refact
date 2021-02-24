@@ -35,6 +35,7 @@ import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity(..))
 import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something)
 import Data.Generics.Uniplate.Data (transformBi, transformBiM, universeBi)
+import Data.IORef.Extra
 import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.List.Extra
@@ -59,6 +60,7 @@ import Panic (handleGhcException)
 import StringBuffer (stringToStringBuffer)
 import System.IO.Error (mkIOError)
 import System.IO.Extra
+import System.IO.Unsafe (unsafePerformIO)
 
 import Debug.Trace
 
@@ -606,8 +608,9 @@ replaceWorker as m keyMap parser seed Replace{..} = do
   let replExprLocation = pos
       uniqueName = "template" ++ show seed
 
-  (relat, template) <- withDynFlags (\d -> parser d uniqueName orig) >>=
-    either (onError "replaceWorked") pure
+  (relat, template) <- do
+    flags <- maybe (withDynFlags id) pure =<< readIORef dynFlagsRef
+    either (onError "replaceWorker") pure $ parser flags uniqueName orig
 
   (newExpr, (newAnns, newKeyMap)) <-
     runStateT
@@ -773,10 +776,9 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper $ do
     -- TODO: report error properly.
     Left err -> pure . Left $ mkErr initFlags (UnhelpfulSpan mempty) err
     Right flags -> do
-      _ <- GHC.setSessionDynFlags flags
+      liftIO $ writeIORef' dynFlagsRef (Just flags)
       res <- parseModuleApiAnnsWithCppInternal defaultCppOptions flags fp
       pure $ postParseTransform res rigidLayout
-
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@
@@ -873,3 +875,9 @@ impliedXFlags
     , (StandaloneKindSignatures, False, CUSKs)
 #endif
   ]
+
+-- TODO: This is added to avoid a breaking change. We should remove it and
+-- directly pass the `DynFlags` as arguments, before the 0.10 release.
+dynFlagsRef :: IORef (Maybe DynFlags)
+dynFlagsRef = unsafePerformIO $ newIORef Nothing
+{-# NOINLINE dynFlagsRef #-}
