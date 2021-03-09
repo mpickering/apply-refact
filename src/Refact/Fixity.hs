@@ -1,6 +1,6 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+
 module Refact.Fixity (applyFixities) where
 
 import Refact.Utils

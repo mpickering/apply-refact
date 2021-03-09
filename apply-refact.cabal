@@ -46,6 +46,19 @@ library
                , unix-compat >= 0.5.2
                , directory >= 1.3
                , uniplate >= 1.6.13
+  default-extensions:  FlexibleContexts
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , GADTs
+                     , LambdaCase
+                     , MultiParamTypeClasses
+                     , NamedFieldPuns
+                     , PolyKinds
+                     , RankNTypes
+                     , ScopedTypeVariables
+                     , TupleSections
+                     , TypeApplications
+                     , TypeOperators
   hs-source-dirs:      src
   default-language:    Haskell2010
 
@@ -80,6 +93,19 @@ executable refactor
                , filepath
                , transformers
                , uniplate
+  default-extensions:  FlexibleContexts
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , GADTs
+                     , LambdaCase
+                     , MultiParamTypeClasses
+                     , NamedFieldPuns
+                     , PolyKinds
+                     , RankNTypes
+                     , ScopedTypeVariables
+                     , TupleSections
+                     , TypeApplications
+                     , TypeOperators
 
 Test-Suite test
   type:                exitcode-stdio-1.0
@@ -93,25 +119,38 @@ Test-Suite test
                  Refact.Options
                  Refact.Run
                  Refact.Utils
-  GHC-Options:         -threaded
-  Default-language:    Haskell2010
-  Build-depends:       tasty
-                     , tasty-golden
-                     , tasty-expected-failure
-                     , base
-               , refact
-               , ghc-exactprint
-               , ghc
-               , ghc-boot-th
-               , containers
-               , extra
-               , syb
-               , process
-               , directory
-               , optparse-applicative
-               , filemanip
-               , unix-compat
-               , filepath
-               , silently
-               , transformers
-               , uniplate
+  ghc-options:         -threaded
+  default-language:    Haskell2010
+  build-depends:  tasty
+                , tasty-golden
+                , tasty-expected-failure
+                , base
+                , refact
+                , ghc-exactprint
+                , ghc
+                , ghc-boot-th
+                , containers
+                , extra
+                , syb
+                , process
+                , directory
+                , optparse-applicative
+                , filemanip
+                , unix-compat
+                , filepath
+                , silently
+                , transformers
+                , uniplate
+  default-extensions:  FlexibleContexts
+                     , FlexibleInstances
+                     , FunctionalDependencies
+                     , GADTs
+                     , LambdaCase
+                     , MultiParamTypeClasses
+                     , NamedFieldPuns
+                     , PolyKinds
+                     , RankNTypes
+                     , ScopedTypeVariables
+                     , TupleSections
+                     , TypeApplications
+                     , TypeOperators
