@@ -1,5 +1,3 @@
-{-# LANGUAGE TupleSections #-}
-
 module Refact.Apply
   ( applyRefactorings
   , applyRefactorings'

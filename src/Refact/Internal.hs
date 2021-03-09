@@ -1,13 +1,8 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE GADTs #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE ViewPatterns #-}
 module Refact.Internal
   ( apply
   , runRefactoring
@@ -43,10 +38,49 @@ import Data.Ord (comparing)
 import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple.Extra
+import Debug.Trace
+
+import qualified GHC hiding (parseModule)
+
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Data.Bag
+import GHC.Data.StringBuffer (stringToStringBuffer)
+import GHC.Driver.Session hiding (initDynFlags)
+import GHC.Driver.Types (handleSourceError)
+import GHC.Parser.Header (getOptions)
+import qualified GHC.Types.Name as GHC
+import qualified GHC.Types.Name.Reader as GHC
+import GHC.Types.SrcLoc hiding (spans)
+import GHC.Utils.Error
+import GHC.Utils.Outputable hiding ((<>))
+import GHC.Utils.Panic (handleGhcException)
+#else
 import DynFlags hiding (initDynFlags)
-import FastString (unpackFS)
 import HeaderInfo (getOptions)
 import HscTypes (handleSourceError)
+import qualified Name as GHC
+import Outputable hiding ((<>))
+import Panic (handleGhcException)
+import qualified RdrName as GHC
+import SrcLoc hiding (spans)
+import StringBuffer (stringToStringBuffer)
+#endif
+
+#if __GLASGOW_HASKELL__ >= 810
+import GHC.Hs.Expr as GHC hiding (Stmt)
+import GHC.Hs.ImpExp
+import GHC.Hs hiding (Pat, Stmt)
+#elif __GLASGOW_HASKELL__ <= 808
+import HsExpr as GHC hiding (Stmt)
+import HsImpExp
+import HsSyn hiding (Pat, Stmt, noExt)
+#endif
+
+#if __GLASGOW_HASKELL__ == 810
+import Bag
+import ErrUtils
+#endif
+
 import GHC.IO.Exception (IOErrorType(..))
 import GHC.LanguageExtensions.Type (Extension(..))
 import Language.Haskell.GHC.ExactPrint
@@ -55,37 +89,17 @@ import Language.Haskell.GHC.ExactPrint.Delta
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Print
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcTc, GhcRn)
-import Language.Haskell.GHC.ExactPrint.Utils
-import Panic (handleGhcException)
-import StringBuffer (stringToStringBuffer)
+import Language.Haskell.GHC.ExactPrint.Utils hiding (rs)
 import System.IO.Error (mkIOError)
 import System.IO.Extra
 import System.IO.Unsafe (unsafePerformIO)
 
-import Debug.Trace
-
-#if __GLASGOW_HASKELL__ >= 810
-import GHC.Hs.Expr as GHC hiding (Stmt)
-import GHC.Hs.ImpExp
-import GHC.Hs hiding (Pat, Stmt)
-import ErrUtils
-import Bag
-#else
-import HsExpr as GHC hiding (Stmt)
-import HsImpExp
-import HsSyn hiding (Pat, Stmt, noExt)
-#endif
-
-import Outputable hiding ((<>))
-import SrcLoc hiding (spans)
-import qualified GHC hiding (parseModule)
-import qualified Name as GHC
-import qualified RdrName as GHC
-
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind, AnnKeyMap
-                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, toGhcSrcSpan', setSrcSpanFile)
+                    , pattern RealSrcSpan'
+                    , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, toGhcSrcSpan'
+                    , annSpanToSrcSpan, srcSpanToAnnSpan, setSrcSpanFile, setAnnSpanFile, getAnnSpan)
 
 #if __GLASGOW_HASKELL__ >= 810
 type Errors = ErrorMessages
@@ -97,7 +111,7 @@ onError :: String -> Errors -> a
 onError _ = error . show
 #endif
 
-#if __GLASGOW_HASKELL__ <= 806
+#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
 composeSrcSpan :: a -> a
 composeSrcSpan = id
 
@@ -129,8 +143,9 @@ apply mpos step inp mbfile verb as0 m0 = do
   toGhcSS <-
     maybe
       ( case getLoc m0 of
-          UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ unpackFS s
-          RealSrcSpan s -> pure $ toGhcSrcSpan' (srcSpanFile s)
+          UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ show s
+          RealSrcSpan' s ->
+            pure $ toGhcSrcSpan' (srcSpanFile s)
       )
       (pure . toGhcSrcSpan)
       mbfile
@@ -294,18 +309,19 @@ runRefactoring as m keyMap = \case
           , annPriorComments = map (first change) annPriorComments }
       changeComment (AnnComment d, dp) = (AnnComment (change d), dp)
       changeComment e = e
-      change old@Comment{..}= if ss2pos commentIdentifier == ss2pos pos
+      change old@Comment{..}= if ss2pos (annSpanToSrcSpan commentIdentifier) == ss2pos pos
                                           then old { commentContents = newComment}
                                           else old
   Delete{rtype, pos} -> pure (as, f m, keyMap)
     where
+      annSpan = srcSpanToAnnSpan pos
       f = case rtype of
-        Stmt -> doDeleteStmt ((/= pos) . getLoc)
-        Import -> doDeleteImport ((/= pos) . getLoc)
+        Stmt -> doDeleteStmt ((/= annSpan) . getAnnSpan)
+        Import -> doDeleteImport ((/= annSpan) . getAnnSpan)
         _ -> id
 
   InsertComment{..} -> do
-    exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m pos
+    exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m (srcSpanToAnnSpan pos)
     pure (insertComment exprkey newComment as, m, keyMap)
 
   RemoveAsKeyword{..} -> pure (as, removeAsKeyword m, keyMap)
@@ -313,7 +329,7 @@ runRefactoring as m keyMap = \case
       removeAsKeyword = transformBi go
       go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
       go imp@(GHC.L l i)
-        | l == pos = GHC.L l (i { ideclAs = Nothing })
+        | srcSpanToAnnSpan l == srcSpanToAnnSpan pos = GHC.L l (i { ideclAs = Nothing })
         | otherwise =  imp
 
 droppedComments :: Anns -> Module -> AnnKeyMap -> Bool
@@ -326,8 +342,8 @@ droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithCom
 
     keySpan (AnnKey ss _) = ss
 
-    allSpans :: Set SrcSpan
-    allSpans = Set.fromList (universeBi m)
+    allSpans :: Set AnnSpan
+    allSpans = Set.fromList . fmap srcSpanToAnnSpan $ universeBi m
 
 -- Specialised parsers
 mkErr :: GHC.DynFlags -> SrcSpan -> String -> Errors
@@ -340,7 +356,11 @@ mkErr = const (,)
 parseModuleName :: SrcSpan -> Parser (GHC.Located GHC.ModuleName)
 parseModuleName ss _ _ s =
   let newMN =  GHC.L ss (GHC.mkModuleName s)
-      newAnns = relativiseApiAnns newMN (Map.empty, Map.empty)
+#if __GLASGOW_HASKELL__ >= 900
+      newAnns = relativiseApiAnns newMN (GHC.ApiAnns mempty Nothing mempty mempty)
+#else
+      newAnns = relativiseApiAnns newMN mempty
+#endif
   in pure (newAnns, newMN)
 parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
@@ -417,7 +437,7 @@ identSub _ _ e = pure e
 -- g is usually modifyAnnKey
 -- f is usually a function which checks the locations are equal
 resolveRdrName' :: (a -> b -> M a)  -- How to combine the value to insert and the replaced value
-               -> (SrcSpan -> M b)    -- How to find the new value, when given the location it is in
+               -> (AnnSpan -> M b)  -- How to find the new value, when given the location it is in
                -> a                 -- The old thing which we are going to possibly replace
                -> [(String, SrcSpan)] -- Substs
                -> GHC.RdrName       -- The name of the position in the template
@@ -427,29 +447,37 @@ resolveRdrName' g f old subs name =
   case name of
     -- Todo: this should replace anns as well?
     GHC.Unqual (GHC.occNameString . GHC.occName -> oname)
-      | Just ss <- lookup oname subs -> f ss >>= g old
+      | Just ss <- lookup oname subs -> f (srcSpanToAnnSpan ss) >>= g old
     _ -> pure old
 
 resolveRdrName :: (Data old, Data a)
                => a
-               -> (SrcSpan -> M (Located old))
+               -> (AnnSpan -> M (Located old))
                -> Located old
                -> [(String, SrcSpan)]
                -> GHC.RdrName
                -> M (Located old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
+badAnnSpan :: AnnSpan
+badAnnSpan =
+#if __GLASGOW_HASKELL__ >= 900
+  badRealSrcSpan
+#else
+  GHC.noSrcSpan
+#endif
+
 insertComment :: AnnKey -> String
               -> Map.Map AnnKey Annotation
               -> Map.Map AnnKey Annotation
 insertComment k s as =
-  let comment = Comment s GHC.noSrcSpan Nothing in
+  let comment = Comment s badAnnSpan Nothing in
   Map.adjust (\a@Ann{..} -> a { annPriorComments = annPriorComments ++ [(comment, DP (1,0))]
                           , annEntryDelta = DP (1,0) }) k as
 
 
 -- Substitute the template into the original AST.
-#if __GLASGOW_HASKELL__ <= 806
+#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
 doGenReplacement
   :: forall ast a. (Data ast, Data a)
   => a
@@ -480,7 +508,7 @@ doGenReplacement m p new old
   | Just Refl <- eqT @(SrcSpanLess ast) @(HsDecl GHC.GhcPs)
   , L _ (ValD xvald newBind@FunBind{}) <- decomposeSrcSpan new
   , Just (oldNoLocal, oldLocal) <- stripLocalBind (decomposeSrcSpan old)
-  , newLoc@(RealSrcSpan newLocReal) <- getLoc new
+  , newLoc@(RealSrcSpan' newLocReal) <- getLoc new
   , p (composeSrcSpan oldNoLocal) = do
       (anns, keyMap) <- gets fst
       let n = decomposeSrcSpan new
@@ -507,17 +535,27 @@ doGenReplacement m p new old
               addAnnWhere oldAnns =
                 let oldAnns' = Map.toList oldAnns
                     po = \case
+#if __GLASGOW_HASKELL__ >= 900
+                      (AnnKey loc con, _) ->
+                        loc == getAnnSpan old && con == CN "Match" && srcSpanFile loc /= newFile
+#else
                       (AnnKey loc@(RealSrcSpan r) con, _) ->
                         loc == getLoc old && con == CN "Match" && srcSpanFile r /= newFile
                       _ -> False
+#endif
                     pn = \case
+#if __GLASGOW_HASKELL__ >= 900
+                      (AnnKey loc con, _) ->
+                        loc == srcSpanToAnnSpan finalLoc && con == CN "Match" && srcSpanFile loc == newFile
+#else
                       (AnnKey loc@(RealSrcSpan r) con, _) ->
                         loc == finalLoc && con == CN "Match" && srcSpanFile r == newFile
                       _ -> False
+#endif
                 in fromMaybe oldAnns $ do
                       oldAnn <- snd <$> find po oldAnns'
                       annWhere <- find ((== G GHC.AnnWhere) . fst) (annsDP oldAnn)
-                      let newSortKey = fmap (setSrcSpanFile newFile) <$> annSortKey oldAnn
+                      let newSortKey = fmap (setAnnSpanFile newFile) <$> annSortKey oldAnn
                       newKey <- fst <$> find pn oldAnns'
                       pure $ Map.adjust
                         (\ann -> ann {annsDP = annsDP ann ++ [annWhere], annSortKey = newSortKey})
@@ -526,20 +564,26 @@ doGenReplacement m p new old
 
               -- Expand the SrcSpan of the "GRHS" entry in the new file to include the local binds
               expandGRHSLoc = \case
+#if __GLASGOW_HASKELL__ >= 900
+                AnnKey r@(annSpanToSrcSpan -> loc) con
+#else
                 AnnKey loc@(RealSrcSpan r) con
-                  | con == CN "GRHS", srcSpanFile r == newFile -> AnnKey (ensureLoc loc) con
+#endif
+                  | con == CN "GRHS", srcSpanFile r == newFile ->
+                    AnnKey (srcSpanToAnnSpan $ ensureLoc loc) con
                 other -> other
 
               -- If an Anns entry corresponds to the local binds, update its file to point to the new file.
               updateFile = \case
                 AnnKey loc con
-                  | loc `isSubspanOf` getLoc oldLocal -> AnnKey (setSrcSpanFile newFile loc) con
+                  | annSpanToSrcSpan loc `isSubspanOf` getLoc oldLocal ->
+                    AnnKey (setAnnSpanFile newFile loc) con
                 other -> other
 
               -- For each SrcSpan in the new file that is the entire newLoc, set it to finalLoc
               expandTemplateLoc = \case
                 AnnKey loc con
-                  | loc == newLoc -> AnnKey finalLoc con
+                  | loc == srcSpanToAnnSpan newLoc -> AnnKey (srcSpanToAnnSpan finalLoc) con
                 other -> other
 
           newAnns = addLocalBindsToAnns intAnns
@@ -585,7 +629,7 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newMG = origMG{mg_alts = L locMG [L locMatch newMatch]}
     newBind = origBind{fun_matches = newMG}
 
-#if __GLASGOW_HASKELL__ <= 806
+#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
 replaceWorker :: (Annotate a, Data mod)
               => Anns
               -> mod
@@ -605,7 +649,7 @@ replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
               -> IO (Anns, mod, AnnKeyMap)
 #endif
 replaceWorker as m keyMap parser seed Replace{..} = do
-  let replExprLocation = pos
+  let replExprLocation = srcSpanToAnnSpan pos
       uniqueName = "template" ++ show seed
 
   (relat, template) <- do
@@ -617,13 +661,21 @@ replaceWorker as m keyMap parser seed Replace{..} = do
       (substTransform m subts template)
       (mergeAnns as relat, keyMap)
   let lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
+#if __GLASGOW_HASKELL__ >= 900
+      adjacent (srcSpanEnd -> RealSrcLoc loc1 _) (srcSpanStart -> RealSrcLoc loc2 _) = loc1 == loc2
+#else
       adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
+#endif
       adjacent _ _ = False
 
       -- Return @True@ if the start position of the two spans are on the same line, and differ
       -- by the given number of columns.
       diffStartCols :: Int -> SrcSpan -> SrcSpan -> Bool
+#if __GLASGOW_HASKELL__ >= 900
+      diffStartCols x (srcSpanStart -> RealSrcLoc loc1 _) (srcSpanStart -> RealSrcLoc loc2 _) =
+#else
       diffStartCols x (srcSpanStart -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) =
+#endif
         srcLocLine loc1 == srcLocLine loc2 && srcLocCol loc1 - srcLocCol loc2 == x
       diffStartCols _ _ _ = False
 
@@ -664,7 +716,7 @@ replaceWorker as m keyMap parser seed Replace{..} = do
             doBlocks' =
               map
                 ( \case
-                    L loc (HsDo _ MDoExpr _) -> (loc, 3)
+                    L loc (HsDo _ MDoExpr{} _) -> (loc, 3)
                     L loc _ -> (loc, 2)
                 )
                 doBlocks
@@ -674,7 +726,7 @@ replaceWorker as m keyMap parser seed Replace{..} = do
             then ann { annEntryDelta = DP (0, 1) }
             else ann
 
-      replacementPred (GHC.L l _) = l == replExprLocation
+      replacementPred = (== replExprLocation) . getAnnSpan
       transformation = transformBiM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr)
   runStateT (transformation m) ((newAnns, newKeyMap), False) >>= \case
     (finalM, ((ensureDoSpace . ensureAppSpace -> finalAs, finalKeyMap), True)) ->
@@ -686,7 +738,7 @@ replaceWorker as m keyMap _ _ _ = pure (as, m, keyMap)
 data NotFound = NotFound
   { nfExpected :: String
   , nfActual :: Maybe String
-  , nfLoc :: SrcSpan
+  , nfLoc :: AnnSpan
   }
 
 renderNotFound :: NotFound -> String
@@ -697,7 +749,7 @@ renderNotFound NotFound{..} =
   ++ "  Location: " ++ showSDocUnsafe (ppr nfLoc)
 
 -- Find a given type with a given SrcSpan
-findInModule :: forall a modu. (Data a, Data modu) => modu -> SrcSpan -> Either NotFound (GHC.Located a)
+findInModule :: forall a modu. (Data a, Data modu) => modu -> AnnSpan -> Either NotFound (GHC.Located a)
 findInModule m ss = case doTrans m of
   Just a -> Right a
   Nothing ->
@@ -717,14 +769,12 @@ findInModule m ss = case doTrans m of
     showType :: forall b. Typeable b => Maybe (GHC.Located b) -> Maybe String
     showType = fmap $ \_ -> show (typeRep (Proxy @b))
 
-findLargestExpression :: SrcSpan -> GHC.Located a -> Maybe (GHC.Located a)
-findLargestExpression ss e@(GHC.L l _)
-  | l == ss = Just e
-  | otherwise = Nothing
+findLargestExpression :: forall a. Data a => AnnSpan -> GHC.Located a -> Maybe (GHC.Located a)
+findLargestExpression as e@(getAnnSpan -> l) = if l == as then Just e else Nothing
 
 findOrError
   :: forall a modu m. (Data a, Data modu, MonadIO m)
-  => modu -> SrcSpan -> m (GHC.Located a)
+  => modu -> AnnSpan -> m (GHC.Located a)
 findOrError m = either f pure . findInModule m
   where
     f nf = liftIO . throwIO $ mkIOError InappropriateType (renderNotFound nf) Nothing Nothing
@@ -774,7 +824,7 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper $ do
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
   case eflags of
     -- TODO: report error properly.
-    Left err -> pure . Left $ mkErr initFlags (UnhelpfulSpan mempty) err
+    Left err -> pure . Left $ mkErr initFlags GHC.noSrcSpan err
     Right flags -> do
       liftIO $ writeIORef' dynFlagsRef (Just flags)
       res <- parseModuleApiAnnsWithCppInternal defaultCppOptions flags fp
@@ -812,6 +862,7 @@ parseExtensions = addImplied . foldl' f mempty
 readExtension :: String -> Maybe Extension
 readExtension s = flagSpecFlag <$> find ((== s) . flagSpecName) xFlags
 
+#if __GLASGOW_HASKELL__ < 900
 -- | Copied from "Language.Haskell.GhclibParserEx.GHC.Driver.Session", in order to
 -- support GHC 8.6
 impliedXFlags :: [(Extension, Bool, Extension)]
@@ -875,6 +926,7 @@ impliedXFlags
     , (StandaloneKindSignatures, False, CUSKs)
 #endif
   ]
+#endif
 
 -- TODO: This is added to avoid a breaking change. We should remove it and
 -- directly pass the `DynFlags` as arguments, before the 0.10 release.

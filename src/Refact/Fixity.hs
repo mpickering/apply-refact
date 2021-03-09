@@ -1,12 +1,9 @@
 {-# LANGUAGE CPP #-}
-{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
+
 module Refact.Fixity (applyFixities) where
 
-import SrcLoc
-
 import Refact.Utils
-import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
 
 #if __GLASGOW_HASKELL__ >= 810
 import GHC.Hs
@@ -15,9 +12,20 @@ import HsExpr
 import HsExtension hiding (noExt)
 #endif
 
+#if __GLASGOW_HASKELL__ >= 900
+import GHC.Parser.Annotation
+import GHC.Types.Basic (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
+import GHC.Types.Name.Occurrence
+import GHC.Types.Name.Reader
+import GHC.Types.SrcLoc
+#else
 import ApiAnnotation
+import BasicTypes (Fixity(..), defaultFixity, compareFixity, negateFixity, FixityDirection(..), SourceText(..))
 import RdrName
 import OccName
+import SrcLoc
+#endif
+
 import Data.Generics hiding (Fixity)
 import Data.List
 import Data.Maybe
@@ -105,13 +113,12 @@ mkOpAppRn fs loc e1@(L _ (NegApp _ neg_arg neg_name)) op2 fix2 e2
       moveDelta oldAnn oldKey newKey
       let res = L loc (NegApp noExt new_e neg_name)
           key = mkAnnKey res
-          ak  = AnnKey loc (CN "OpApp")
+          ak  = AnnKey (srcSpanToAnnSpan loc) (CN "OpApp")
       opAnn <- gets (fromMaybe annNone . Map.lookup ak)
       negAnns <- gets (fromMaybe annNone . Map.lookup (mkAnnKey e1))
       modify $ Map.insert key (annNone { annEntryDelta = annEntryDelta opAnn, annsDP = annsDP negAnns })
       modify $ Map.delete (mkAnnKey e1)
       return res
-
   where
     loc' = combineLocs neg_arg e2
     (nofix_error, associate_right) = compareFixity negateFixity fix2
