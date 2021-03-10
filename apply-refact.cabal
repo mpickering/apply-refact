@@ -1,7 +1,7 @@
 cabal-version:       2.4
 
 name:                apply-refact
-version:             0.9.1.0
+version:             0.9.2.0
 synopsis:            Perform refactorings specified by the refact library.
 description:         Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
 license:             BSD-3-Clause
