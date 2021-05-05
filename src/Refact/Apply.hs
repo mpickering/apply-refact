@@ -11,7 +11,7 @@ import Language.Haskell.GHC.ExactPrint.Types (Anns)
 import Refact.Fixity (applyFixities)
 import Refact.Internal
 import Refact.Types (Refactoring, SrcSpan)
-import Refact.Utils (Module)
+import Refact.Compat (Module)
 
 -- | Apply a set of refactorings as supplied by HLint
 applyRefactorings

@@ -1,6 +1,4 @@
 {-# LANGUAGE ApplicativeDo #-}
-{-# LANGUAGE ConstraintKinds #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE StrictData #-}
 
@@ -10,11 +8,8 @@ import Data.Char (isDigit)
 import Options.Applicative
 import Text.Read (readMaybe)
 
+import Refact.Compat (MonadFail')
 import Refact.Internal (Verbosity(..))
-
-#if __GLASGOW_HASKELL__ <= 806
-type MonadFail = Monad
-#endif
 
 data Options = Options
   { optionsTarget   :: Maybe FilePath -- ^ Where to process hints
@@ -29,7 +24,6 @@ data Options = Options
   , optionsLanguage :: [String]
   , optionsPos     :: Maybe (Int, Int)
   }
-
 
 options :: Parser Options
 options = do
@@ -104,7 +98,7 @@ parseVerbosity = pure . \case
   "2" -> Loud
   _   -> Normal
 
-parsePos :: MonadFail m => String -> m (Int, Int)
+parsePos :: MonadFail' m => String -> m (Int, Int)
 parsePos s =
   case span isDigit s of
     (line, ',':col) ->
