@@ -30,6 +30,7 @@ library
                    , Refact.Apply
                    , Refact.Fixity
                    , Refact.Internal
+                   , Refact.Compat
   GHC-Options: -Wall
   build-depends: base >=4.12 && < 5
                , refact >= 0.2
@@ -67,6 +68,7 @@ executable refactor
   other-modules:
                  Paths_apply_refact
                  Refact.Apply
+                 Refact.Compat
                  Refact.Fixity
                  Refact.Internal
                  Refact.Options
@@ -114,6 +116,7 @@ Test-Suite test
   other-modules:
                  Paths_apply_refact
                  Refact.Apply
+                 Refact.Compat
                  Refact.Fixity
                  Refact.Internal
                  Refact.Options

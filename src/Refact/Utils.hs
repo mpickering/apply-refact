@@ -1,21 +1,16 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Refact.Utils ( -- * Synonyms
-                      Module
-                    , Stmt
+                      Stmt
                     , Expr
                     , Decl
                     , Name
                     , Pat
                     , Type
                     , Import
-                    , FunBind
                     , AnnKeyMap
-                    , pattern RealSrcLoc'
-                    , pattern RealSrcSpan'
                     -- * Monad
                     , M
                     -- * Utility
@@ -26,12 +21,8 @@ module Refact.Utils ( -- * Synonyms
                     , getAnnSpan
                     , toGhcSrcSpan
                     , toGhcSrcSpan'
-                    , annSpanToSrcSpan
-                    , srcSpanToAnnSpan
-                    , setAnnSpanFile
-                    , setSrcSpanFile
-                    , setRealSrcSpanFile
                     , findParent
+                    , foldAnnKey,
                     ) where
 
 import Language.Haskell.GHC.ExactPrint
@@ -39,57 +30,33 @@ import Language.Haskell.GHC.ExactPrint.Types
 
 import Data.Bifunctor (bimap)
 import Data.Data
-import Data.Map.Strict (Map)
+    ( Data(toConstr, gmapQi),
+      typeRep,
+      Proxy(..),
+      splitTyConApp,
+      typeOf,
+      typeRepTyCon )
 
-#if __GLASGOW_HASKELL__ >= 900
-import GHC.Data.FastString (FastString)
-import qualified GHC.Data.FastString as GHC
-import qualified GHC.Parser.Annotation as GHC
-import qualified GHC.Types.Name.Reader as GHC
-import GHC.Types.SrcLoc
-import qualified GHC.Types.SrcLoc as GHC
-#else
-import FastString (FastString)
-import qualified FastString as GHC
-import SrcLoc
-import qualified SrcLoc as GHC
-import qualified RdrName as GHC
-import qualified ApiAnnotation as GHC
-#endif
+import qualified GHC
 
-import qualified GHC hiding (parseModule)
+import Control.Monad.Trans.State ( StateT, gets, modify )
 
-#if __GLASGOW_HASKELL__ >= 810
-import GHC.Hs.Expr as GHC hiding (Stmt)
-import GHC.Hs.ImpExp
-#else
-import HsExpr as GHC hiding (Stmt)
-import HsImpExp
-#endif
-
-import Control.Monad.Trans.State
-
-import qualified Data.Map as Map
-import Data.Maybe
+import qualified Data.Map.Strict as Map
+import Data.Maybe ( fromMaybe, isJust )
 
 
 import qualified Refact.Types as R
 
-import Data.Generics.Schemes
-import Unsafe.Coerce
+import Data.Generics.Schemes ( something )
+import Unsafe.Coerce ( unsafeCoerce )
 
+import Refact.Compat
+  (AnnKeyMap, AnnKeywordId (..), srcSpanToAnnSpan,
+   mkFastString, FastString, pattern RealSrcSpan', annSpanToSrcSpan,
+  )
 
 -- Types
---
 type M a = StateT (Anns, AnnKeyMap) IO a
-
-type AnnKeyMap = Map AnnKey [AnnKey]
-
-#if __GLASGOW_HASKELL__ >= 900
-type Module = (GHC.Located GHC.HsModule)
-#else
-type Module = (GHC.Located (GHC.HsModule GHC.GhcPs))
-#endif
 
 type Expr = GHC.Located (GHC.HsExpr GHC.GhcPs)
 
@@ -101,35 +68,10 @@ type Pat =  GHC.Located (GHC.Pat GHC.GhcPs)
 
 type Name = GHC.Located GHC.RdrName
 
-type Stmt = ExprLStmt GHC.GhcPs
+type  Stmt = GHC.ExprLStmt GHC.GhcPs
 
-type Import = LImportDecl GHC.GhcPs
+type Import = GHC.LImportDecl GHC.GhcPs
 
-#if __GLASGOW_HASKELL__ >= 900
-type FunBind = HsMatchContext GHC.GhcPs
-#else
-type FunBind = HsMatchContext GHC.RdrName
-#endif
-
-pattern RealSrcLoc' :: RealSrcLoc -> SrcLoc
-#if __GLASGOW_HASKELL__ >= 900
-pattern RealSrcLoc' r <- RealSrcLoc r _ where
-  RealSrcLoc' r = RealSrcLoc r Nothing
-#else
-pattern RealSrcLoc' r <- RealSrcLoc r where
-  RealSrcLoc' r = RealSrcLoc r
-#endif
-{-# COMPLETE RealSrcLoc', UnhelpfulLoc #-}
-
-pattern RealSrcSpan' :: RealSrcSpan -> SrcSpan
-#if __GLASGOW_HASKELL__ >= 900
-pattern RealSrcSpan' r <- RealSrcSpan r _ where
-  RealSrcSpan' r = RealSrcSpan r Nothing
-#else
-pattern RealSrcSpan' r <- RealSrcSpan r where
-  RealSrcSpan' r = RealSrcSpan r
-#endif
-{-# COMPLETE RealSrcSpan', UnhelpfulSpan #-}
 
 -- | Replaces an old expression with a new expression
 --
@@ -158,7 +100,7 @@ combine oldDelta newkey oldann newann =
     -- Get rid of structural information when replacing, we assume that the
     -- structural information is already there in the new expression.
     removeComma = filter (\(kw, _) -> case kw of
-                                         G GHC.AnnComma
+                                         G AnnComma
                                            | AnnKey _ (CN "ArithSeq") <- newkey -> True
                                            | otherwise -> False
                                          AnnSemiSep -> False
@@ -167,9 +109,9 @@ combine oldDelta newkey oldann newann =
     -- Make sure to keep structural information in the template.
     extraComma [] = []
     extraComma (last -> x) = case fst x of
-                              G GHC.AnnComma -> [x]
+                              G AnnComma -> [x]
                               AnnSemiSep -> [x]
-                              G GHC.AnnSemi -> [x]
+                              G AnnSemi -> [x]
                               _ -> []
 
     -- Keep the same delta if moving onto a new row
@@ -197,24 +139,8 @@ findParentWorker oldSS as a
     ss = gmapQi 0 unsafeCoerce a
     cn = gmapQi 1 (CN . show . toConstr) a
 
-getAnnSpan :: forall a. Located a -> AnnSpan
-getAnnSpan = srcSpanToAnnSpan . getLoc
-
-srcSpanToAnnSpan :: SrcSpan -> AnnSpan
-srcSpanToAnnSpan =
-#if __GLASGOW_HASKELL__ >= 900
-  \case GHC.RealSrcSpan l _ -> l; _ -> badRealSrcSpan
-#else
-  id
-#endif
-
-annSpanToSrcSpan :: AnnSpan -> SrcSpan
-annSpanToSrcSpan =
-#if __GLASGOW_HASKELL__ >= 900
-  flip GHC.RealSrcSpan Nothing
-#else
-  id
-#endif
+getAnnSpan :: forall a. GHC.Located a -> AnnSpan
+getAnnSpan = srcSpanToAnnSpan . GHC.getLoc
 
 -- | Perform the necessary adjustments to annotations when replacing
 -- one Located thing with another Located thing.
@@ -223,7 +149,7 @@ annSpanToSrcSpan =
 -- make sure that any trailing semi colons or commas are transferred.
 modifyAnnKey
   :: (Data old, Data new, Data mod)
-  => mod -> Located old -> Located new -> M (Located new)
+  => mod -> GHC.Located old -> GHC.Located new -> M (GHC.Located new)
 modifyAnnKey m e1 e2 = do
   as <- gets fst
   let parentKey = fromMaybe (mkAnnKey e2) (findParent (getAnnSpan e2) as m)
@@ -239,17 +165,17 @@ modifyAnnKey m e1 e2 = do
 -- is not backquoted, we must add the corresponding 'GHC.AnnBackQuote's.
 --
 -- See tests/examples/Backquotes.hs for an example.
-recoverBackquotes :: Located old -> Located new -> Anns -> Anns
+recoverBackquotes :: GHC.Located old -> GHC.Located new -> Anns -> Anns
 recoverBackquotes (getAnnSpan -> old) (getAnnSpan -> new) anns
   | Just annOld <- Map.lookup (AnnKey old (CN "Unqual")) anns
-  , ( (G GHC.AnnBackquote, DP (i, j))
-    : rest@( (G GHC.AnnVal, _)
-           : (G GHC.AnnBackquote, _)
+  , ( (G AnnBackquote, DP (i, j))
+    : rest@( (G AnnVal, _)
+           : (G AnnBackquote, _)
            : _)
     ) <- annsDP annOld
   = let f annNew = case annsDP annNew of
-          [(G GHC.AnnVal, DP (i', j'))] ->
-            annNew {annsDP = (G GHC.AnnBackquote, DP (i + i', j + j')) : rest}
+          [(G AnnVal, DP (i', j'))] ->
+            annNew {annsDP = (G AnnBackquote, DP (i + i', j + j')) : rest}
           _ -> annNew
      in Map.adjust f (AnnKey new (CN "Unqual")) anns
   | otherwise = anns
@@ -260,36 +186,21 @@ replaceAnnKey old new inp deltainfo a =
   fromMaybe a (replace old new inp deltainfo a)
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
-toGhcSrcSpan :: FilePath -> R.SrcSpan -> SrcSpan
-toGhcSrcSpan = toGhcSrcSpan' . GHC.mkFastString
+toGhcSrcSpan :: FilePath -> R.SrcSpan -> GHC.SrcSpan
+toGhcSrcSpan = toGhcSrcSpan' . mkFastString
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
-toGhcSrcSpan' :: FastString -> R.SrcSpan -> SrcSpan
-toGhcSrcSpan' file R.SrcSpan{..} = mkSrcSpan (f startLine startCol) (f endLine endCol)
+toGhcSrcSpan' :: FastString -> R.SrcSpan -> GHC.SrcSpan
+toGhcSrcSpan' file R.SrcSpan{..} = GHC.mkSrcSpan (f startLine startCol) (f endLine endCol)
   where
-    f = mkSrcLoc file
+    f = GHC.mkSrcLoc file
 
-setSrcSpanFile :: FastString -> SrcSpan -> SrcSpan
-setSrcSpanFile file s
-  | RealSrcLoc' start <- srcSpanStart s
-  , RealSrcLoc' end <- srcSpanEnd s
-  = let start' = mkSrcLoc file (srcLocLine start) (srcLocCol start)
-        end' = mkSrcLoc file (srcLocLine end) (srcLocCol end)
-     in mkSrcSpan start' end'
-setSrcSpanFile _ s = s
-
-setRealSrcSpanFile :: FastString -> RealSrcSpan -> RealSrcSpan
-setRealSrcSpanFile file s = mkRealSrcSpan start' end'
-  where
-    start = realSrcSpanStart s
-    end = realSrcSpanEnd s
-    start' = mkRealSrcLoc file (srcLocLine start) (srcLocCol start)
-    end' = mkRealSrcLoc file (srcLocLine end) (srcLocCol end)
-
-setAnnSpanFile :: FastString -> AnnSpan -> AnnSpan
-setAnnSpanFile =
-#if __GLASGOW_HASKELL__ >= 900
-  setRealSrcSpanFile
-#else
-  setSrcSpanFile
-#endif
+foldAnnKey ::
+  forall a.
+  (AnnKey -> a) ->
+  (GHC.RealSrcSpan -> AnnConName -> a) ->
+  AnnKey ->
+  a
+foldAnnKey f g key@(AnnKey (annSpanToSrcSpan -> ss) con) = case ss of
+  RealSrcSpan' r -> g r con
+  _ -> f key

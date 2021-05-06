@@ -1,4 +1,3 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -40,51 +39,11 @@ import qualified Data.Set as Set
 import Data.Tuple.Extra
 import Debug.Trace
 
-import qualified GHC hiding (parseModule)
-
-#if __GLASGOW_HASKELL__ >= 900
-import GHC.Data.Bag
-import GHC.Data.StringBuffer (stringToStringBuffer)
-import GHC.Driver.Session hiding (initDynFlags)
-import GHC.Driver.Types (handleSourceError)
-import GHC.Parser.Header (getOptions)
-import qualified GHC.Types.Name as GHC
-import qualified GHC.Types.Name.Reader as GHC
-import GHC.Types.SrcLoc hiding (spans)
-import GHC.Utils.Error
-import GHC.Utils.Outputable hiding ((<>))
-import GHC.Utils.Panic (handleGhcException)
-#else
-import DynFlags hiding (initDynFlags)
-import HeaderInfo (getOptions)
-import HscTypes (handleSourceError)
-import qualified Name as GHC
-import Outputable hiding ((<>))
-import Panic (handleGhcException)
-import qualified RdrName as GHC
-import SrcLoc hiding (spans)
-import StringBuffer (stringToStringBuffer)
-#endif
-
-#if __GLASGOW_HASKELL__ >= 810
-import GHC.Hs.Expr as GHC hiding (Stmt)
-import GHC.Hs.ImpExp
-import GHC.Hs hiding (Pat, Stmt)
-#elif __GLASGOW_HASKELL__ <= 808
-import HsExpr as GHC hiding (Stmt)
-import HsImpExp
-import HsSyn hiding (Pat, Stmt, noExt)
-#endif
-
-#if __GLASGOW_HASKELL__ == 810
-import Bag
-import ErrUtils
-#endif
+import qualified GHC
 
 import GHC.IO.Exception (IOErrorType(..))
-import GHC.LanguageExtensions.Type (Extension(..))
+import GHC.LanguageExtensions.Type (Extension (..))
 import Language.Haskell.GHC.ExactPrint
-import Language.Haskell.GHC.ExactPrint.Annotate
 import Language.Haskell.GHC.ExactPrint.Delta
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Print
@@ -96,32 +55,18 @@ import System.IO.Unsafe (unsafePerformIO)
 
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
-import Refact.Utils (Stmt, Pat, Name, Decl, M, Module, Expr, Type, FunBind, AnnKeyMap
-                    , pattern RealSrcSpan'
+import Refact.Utils (Stmt, Pat, Name, Decl, M, Expr, Type, AnnKeyMap
                     , modifyAnnKey, replaceAnnKey, Import, toGhcSrcSpan, toGhcSrcSpan'
-                    , annSpanToSrcSpan, srcSpanToAnnSpan, setSrcSpanFile, setAnnSpanFile, getAnnSpan)
+                    ,  getAnnSpan, foldAnnKey)
 
-#if __GLASGOW_HASKELL__ >= 810
-type Errors = ErrorMessages
-onError :: String -> Errors -> a
-onError s = pprPanic s . vcat . pprErrMsgBagWithLoc
-#else
-type Errors = (SrcSpan, String)
-onError :: String -> Errors -> a
-onError _ = error . show
-#endif
-
-#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
-composeSrcSpan :: a -> a
-composeSrcSpan = id
-
-decomposeSrcSpan :: a -> a
-decomposeSrcSpan = id
-
-type SrcSpanLess a = a
-#endif
-
--- library access to perform the substitutions
+import Refact.Compat (Errors, onError, Module, FunBind, pattern RealSrcSpan', pattern RealSrcLoc',
+  annSpanToSrcSpan, srcSpanToAnnSpan, setSrcSpanFile, setAnnSpanFile,
+  composeSrcSpan, decomposeSrcSpan, occNameString, nameOccName, rdrNameOcc, DoGenReplacement, SrcSpanLess,
+  occName, badAnnSpan, combineSrcSpans, parseDynamicFilePragma,
+  gopt_set, handleGhcException, FlagSpec (..), xFlags, impliedXFlags,
+  mkErr, parseModuleName,
+  showSDocUnsafe, ppr, stringToStringBuffer, getOptions, xopt_set, xopt_unset,
+  ReplaceWorker, RdrName (..))
 
 refactOptions :: PrintOptions Identity String
 refactOptions = stringOptions { epRigidity = RigidLayout }
@@ -142,14 +87,14 @@ apply
 apply mpos step inp mbfile verb as0 m0 = do
   toGhcSS <-
     maybe
-      ( case getLoc m0 of
-          UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ show s
+      ( case GHC.getLoc m0 of
+          GHC.UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ show s
           RealSrcSpan' s ->
-            pure $ toGhcSrcSpan' (srcSpanFile s)
+            pure $ toGhcSrcSpan' (GHC.srcSpanFile s)
       )
       (pure . toGhcSrcSpan)
       mbfile
-  let allRefacts :: [((String, [Refactoring SrcSpan]), R.SrcSpan)]
+  let allRefacts :: [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)]
       allRefacts =
         sortBy cmpSrcSpan
         . map (first . second . map . fmap $ toGhcSS)
@@ -196,7 +141,7 @@ runRefactorings
   :: Verbosity
   -> Anns
   -> Module
-  -> [([Refactoring SrcSpan], R.SrcSpan)]
+  -> [([Refactoring GHC.SrcSpan], R.SrcSpan)]
   -> StateT Int IO (Anns, Module)
 runRefactorings verb as0 m0 ((rs, ss) : rest) = do
   runRefactorings' verb as0 m0 rs >>= \case
@@ -212,7 +157,7 @@ runRefactorings'
   :: Verbosity
   -> Anns
   -> Module
-  -> [Refactoring SrcSpan]
+  -> [Refactoring GHC.SrcSpan]
   -> StateT Int IO (Maybe (Anns, Module))
 runRefactorings' verb as0 m0 rs = do
   seed <- get
@@ -242,7 +187,7 @@ data LoopOption = LoopOption
 refactoringLoop
   :: Anns
   -> Module
-  -> [((String, [Refactoring SrcSpan]), R.SrcSpan)]
+  -> [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)]
   -> MaybeT IO (Anns, Module)
 refactoringLoop as m [] = pure (as, m)
 refactoringLoop as m (((_, []), _): rs) = refactoringLoop as m rs
@@ -286,7 +231,7 @@ runRefactoring
   => Anns
   -> a
   -> AnnKeyMap
-  -> Refactoring SrcSpan
+  -> Refactoring GHC.SrcSpan
   -> StateT Int IO (Anns, a, AnnKeyMap)
 runRefactoring as m keyMap = \case
   r@Replace{} -> do
@@ -321,15 +266,15 @@ runRefactoring as m keyMap = \case
         _ -> id
 
   InsertComment{..} -> do
-    exprkey <- mkAnnKey <$> findOrError @(HsDecl GhcPs) m (srcSpanToAnnSpan pos)
+    exprkey <- mkAnnKey <$> findOrError @(GHC.HsDecl GHC.GhcPs) m (srcSpanToAnnSpan pos)
     pure (insertComment exprkey newComment as, m, keyMap)
 
   RemoveAsKeyword{..} -> pure (as, removeAsKeyword m, keyMap)
     where
       removeAsKeyword = transformBi go
-      go :: LImportDecl GHC.GhcPs -> LImportDecl GHC.GhcPs
+      go :: GHC.LImportDecl GHC.GhcPs -> GHC.LImportDecl GHC.GhcPs
       go imp@(GHC.L l i)
-        | srcSpanToAnnSpan l == srcSpanToAnnSpan pos = GHC.L l (i { ideclAs = Nothing })
+        | srcSpanToAnnSpan l == srcSpanToAnnSpan pos = GHC.L l (i { GHC.ideclAs = Nothing })
         | otherwise =  imp
 
 droppedComments :: Anns -> Module -> AnnKeyMap -> Bool
@@ -345,23 +290,7 @@ droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithCom
     allSpans :: Set AnnSpan
     allSpans = Set.fromList . fmap srcSpanToAnnSpan $ universeBi m
 
--- Specialised parsers
-mkErr :: GHC.DynFlags -> SrcSpan -> String -> Errors
-#if __GLASGOW_HASKELL__ >= 810
-mkErr df l s = unitBag (mkPlainErrMsg df l (text s))
-#else
-mkErr = const (,)
-#endif
 
-parseModuleName :: SrcSpan -> Parser (GHC.Located GHC.ModuleName)
-parseModuleName ss _ _ s =
-  let newMN =  GHC.L ss (GHC.mkModuleName s)
-#if __GLASGOW_HASKELL__ >= 900
-      newAnns = relativiseApiAnns newMN (GHC.ApiAnns mempty Nothing mempty mempty)
-#else
-      newAnns = relativiseApiAnns newMN mempty
-#endif
-  in pure (newAnns, newMN)
 parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
   case parseDecl dyn fname s of
@@ -373,7 +302,7 @@ parseMatch :: Parser (GHC.LMatch GHC.GhcPs (GHC.LHsExpr GHC.GhcPs))
 parseMatch dyn fname s =
   case parseBind dyn fname s of
     Right (as, GHC.L l GHC.FunBind{fun_matches}) ->
-      case unLoc (GHC.mg_alts fun_matches) of
+      case GHC.unLoc (GHC.mg_alts fun_matches) of
            [x] -> Right (as, x)
            _   -> Left (mkErr dyn l "Not a single match")
     Right (_, GHC.L l _) -> Left (mkErr dyn l "Not a funbind")
@@ -382,7 +311,7 @@ parseMatch dyn fname s =
 -- Substitute variables into templates
 -- Finds places in the templates where we need to insert variables.
 
-substTransform :: (Data a, Data b) => b -> [(String, SrcSpan)] -> a -> M a
+substTransform :: (Data a, Data b) => b -> [(String, GHC.SrcSpan)] -> a -> M a
 substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     `extM` identSub m ss
                                     `extM` patSub m ss
@@ -390,23 +319,23 @@ substTransform m ss = everywhereM (mkM (typeSub m ss)
                                     `extM` exprSub m ss
                                     )
 
-stmtSub :: Data a => a -> [(String, SrcSpan)] -> Stmt -> M Stmt
-stmtSub m subs old@(GHC.L _ (BodyStmt _ (GHC.L _ (HsVar _ (L _ name))) _ _) ) =
+stmtSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Stmt -> M Stmt
+stmtSub m subs old@(GHC.L _ (GHC.BodyStmt _ (GHC.L _ (GHC.HsVar _ (GHC.L _ name))) _ _) ) =
   resolveRdrName m (findOrError m) old subs name
 stmtSub _ _ e = pure e
 
-patSub :: Data a => a -> [(String, SrcSpan)] -> Pat -> M Pat
-patSub m subs old@(GHC.L _ (VarPat _ (L _ name))) =
+patSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Pat -> M Pat
+patSub m subs old@(GHC.L _ (GHC.VarPat _ (GHC.L _ name))) =
   resolveRdrName m (findOrError m) old subs name
 patSub _ _ e = pure e
 
-typeSub :: Data a => a -> [(String, SrcSpan)] -> Type -> M Type
-typeSub m subs old@(GHC.L _ (HsTyVar _ _ (L _ name))) =
+typeSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Type -> M Type
+typeSub m subs old@(GHC.L _ (GHC.HsTyVar _ _ (GHC.L _ name))) =
   resolveRdrName m (findOrError m) old subs name
 typeSub _ _ e = pure e
 
-exprSub :: Data a => a -> [(String, SrcSpan)] -> Expr -> M Expr
-exprSub m subs old@(GHC.L _ (HsVar _ (L _ name))) =
+exprSub :: Data a => a -> [(String, GHC.SrcSpan)] -> Expr -> M Expr
+exprSub m subs old@(GHC.L _ (GHC.HsVar _ (GHC.L _ name))) =
   resolveRdrName m (findOrError m) old subs name
 exprSub _ _ e = pure e
 
@@ -417,14 +346,14 @@ exprSub _ _ e = pure e
 -- This looks convoluted but we can't match directly on a located name as
 -- it is not specific enough. Instead we match on some bigger context which
 -- is contains the located name we want to replace.
-identSub :: Data a => a -> [(String, SrcSpan)] -> FunBind -> M FunBind
+identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
 identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
   resolveRdrName' subst (findOrError m) old subs name
   where
     subst :: FunBind -> Name -> M FunBind
     subst (GHC.FunRhs n b s) new = do
-      let fakeExpr :: Located (GHC.Pat GhcPs)
-          fakeExpr = GHC.L (getLoc new) (GHC.VarPat noExt new)
+      let fakeExpr :: Pat
+          fakeExpr = GHC.L (GHC.getLoc new) (GHC.VarPat noExt new)
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       modify . first $
@@ -439,33 +368,25 @@ identSub _ _ e = pure e
 resolveRdrName' :: (a -> b -> M a)  -- How to combine the value to insert and the replaced value
                -> (AnnSpan -> M b)  -- How to find the new value, when given the location it is in
                -> a                 -- The old thing which we are going to possibly replace
-               -> [(String, SrcSpan)] -- Substs
+               -> [(String, GHC.SrcSpan)] -- Substs
                -> GHC.RdrName       -- The name of the position in the template
                                     --we are replacing into
                -> M a
 resolveRdrName' g f old subs name =
   case name of
     -- Todo: this should replace anns as well?
-    GHC.Unqual (GHC.occNameString . GHC.occName -> oname)
+    GHC.Unqual (occNameString . occName -> oname)
       | Just ss <- lookup oname subs -> f (srcSpanToAnnSpan ss) >>= g old
     _ -> pure old
 
 resolveRdrName :: (Data old, Data a)
                => a
-               -> (AnnSpan -> M (Located old))
-               -> Located old
-               -> [(String, SrcSpan)]
+               -> (AnnSpan -> M (GHC.Located old))
+               -> GHC.Located old
+               -> [(String, GHC.SrcSpan)]
                -> GHC.RdrName
-               -> M (Located old)
+               -> M (GHC.Located old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
-
-badAnnSpan :: AnnSpan
-badAnnSpan =
-#if __GLASGOW_HASKELL__ >= 900
-  badRealSrcSpan
-#else
-  GHC.noSrcSpan
-#endif
 
 insertComment :: AnnKey -> String
               -> Map.Map AnnKey Annotation
@@ -477,23 +398,7 @@ insertComment k s as =
 
 
 -- Substitute the template into the original AST.
-#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
-doGenReplacement
-  :: forall ast a. (Data ast, Data a)
-  => a
-  -> (GHC.Located ast -> Bool)
-  -> GHC.Located ast
-  -> GHC.Located ast
-  -> StateT ((Anns, AnnKeyMap), Bool) IO (GHC.Located ast)
-#else
-doGenReplacement
-  :: forall ast a. (Data (SrcSpanLess ast), HasSrcSpan ast, Data a)
-  => a
-  -> (ast -> Bool)
-  -> ast
-  -> ast
-  -> StateT ((Anns, AnnKeyMap), Bool) IO ast
-#endif
+doGenReplacement :: forall ast a. DoGenReplacement ast a
 doGenReplacement m p new old
   | p old = do
       (anns, keyMap) <- gets fst
@@ -505,22 +410,22 @@ doGenReplacement m p new old
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
   -- run the replacement on "f a = body", and add "local" back afterwards.
   -- This is useful for hints like "Eta reduce" and "Redundant where".
-  | Just Refl <- eqT @(SrcSpanLess ast) @(HsDecl GHC.GhcPs)
-  , L _ (ValD xvald newBind@FunBind{}) <- decomposeSrcSpan new
+  | Just Refl <- eqT @(SrcSpanLess ast) @(GHC.HsDecl GHC.GhcPs)
+  , GHC.L _ (GHC.ValD xvald newBind@GHC.FunBind{}) <- decomposeSrcSpan new
   , Just (oldNoLocal, oldLocal) <- stripLocalBind (decomposeSrcSpan old)
-  , newLoc@(RealSrcSpan' newLocReal) <- getLoc new
+  , newLoc@(RealSrcSpan' newLocReal) <- GHC.getLoc new
   , p (composeSrcSpan oldNoLocal) = do
       (anns, keyMap) <- gets fst
       let n = decomposeSrcSpan new
           o = decomposeSrcSpan old
       (intAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
-      let newFile = srcSpanFile newLocReal
+      let newFile = GHC.srcSpanFile newLocReal
           newLocal = transformBi (setSrcSpanFile newFile) oldLocal
-          newLocalLoc = getLoc newLocal
+          newLocalLoc = GHC.getLoc newLocal
           ensureLoc = combineSrcSpans newLocalLoc
-          newMG = fun_matches newBind
-          L locMG [L locMatch newMatch] = mg_alts newMG
-          newGRHSs = m_grhss newMatch
+          newMG = GHC.fun_matches newBind
+          GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+          newGRHSs = GHC.m_grhss newMatch
           finalLoc = ensureLoc newLoc
           newWithLocalBinds = setLocalBind newLocal xvald newBind finalLoc
                                            newMG (ensureLoc locMG) newMatch (ensureLoc locMatch) newGRHSs
@@ -534,49 +439,34 @@ doGenReplacement m p new old
               addAnnWhere :: Anns -> Anns
               addAnnWhere oldAnns =
                 let oldAnns' = Map.toList oldAnns
-                    po = \case
-#if __GLASGOW_HASKELL__ >= 900
-                      (AnnKey loc con, _) ->
-                        loc == getAnnSpan old && con == CN "Match" && srcSpanFile loc /= newFile
-#else
-                      (AnnKey loc@(RealSrcSpan r) con, _) ->
-                        loc == getLoc old && con == CN "Match" && srcSpanFile r /= newFile
-                      _ -> False
-#endif
-                    pn = \case
-#if __GLASGOW_HASKELL__ >= 900
-                      (AnnKey loc con, _) ->
-                        loc == srcSpanToAnnSpan finalLoc && con == CN "Match" && srcSpanFile loc == newFile
-#else
-                      (AnnKey loc@(RealSrcSpan r) con, _) ->
-                        loc == finalLoc && con == CN "Match" && srcSpanFile r == newFile
-                      _ -> False
-#endif
+                    po = foldAnnKey (const False) $ \r con ->
+                      srcSpanToAnnSpan (RealSrcSpan' r) == srcSpanToAnnSpan (GHC.getLoc old)
+                        && con == CN "Match"
+                        && GHC.srcSpanFile r /= newFile
+                    pn = foldAnnKey (const False) $ \r con ->
+                      srcSpanToAnnSpan (RealSrcSpan' r) == srcSpanToAnnSpan finalLoc
+                        && con == CN "Match"
+                        && GHC.srcSpanFile r == newFile
                 in fromMaybe oldAnns $ do
-                      oldAnn <- snd <$> find po oldAnns'
+                      oldAnn <- snd <$> find (po . fst) oldAnns'
                       annWhere <- find ((== G GHC.AnnWhere) . fst) (annsDP oldAnn)
                       let newSortKey = fmap (setAnnSpanFile newFile) <$> annSortKey oldAnn
-                      newKey <- fst <$> find pn oldAnns'
+                      newKey <- fst <$> find (pn . fst) oldAnns'
                       pure $ Map.adjust
                         (\ann -> ann {annsDP = annsDP ann ++ [annWhere], annSortKey = newSortKey})
                         newKey
                         oldAnns
 
               -- Expand the SrcSpan of the "GRHS" entry in the new file to include the local binds
-              expandGRHSLoc = \case
-#if __GLASGOW_HASKELL__ >= 900
-                AnnKey r@(annSpanToSrcSpan -> loc) con
-#else
-                AnnKey loc@(RealSrcSpan r) con
-#endif
-                  | con == CN "GRHS", srcSpanFile r == newFile ->
-                    AnnKey (srcSpanToAnnSpan $ ensureLoc loc) con
-                other -> other
+              expandGRHSLoc = foldAnnKey id $ \r con ->
+                if con == CN "GRHS" && GHC.srcSpanFile r == newFile
+                  then AnnKey (srcSpanToAnnSpan $ ensureLoc $ RealSrcSpan' r) con
+                  else AnnKey (srcSpanToAnnSpan $ RealSrcSpan' r) con
 
               -- If an Anns entry corresponds to the local binds, update its file to point to the new file.
               updateFile = \case
                 AnnKey loc con
-                  | annSpanToSrcSpan loc `isSubspanOf` getLoc oldLocal ->
+                  | annSpanToSrcSpan loc `GHC.isSubspanOf` GHC.getLoc oldLocal ->
                     AnnKey (setAnnSpanFile newFile loc) con
                 other -> other
 
@@ -594,60 +484,42 @@ doGenReplacement m p new old
 -- | If the input is a FunBind with a single match, e.g., "foo a = body where x = y"
 -- return "Just (foo a = body, x = y)". Otherwise return Nothing.
 stripLocalBind
-  :: LHsDecl GHC.GhcPs
-  -> Maybe (LHsDecl GHC.GhcPs, LHsLocalBinds GHC.GhcPs)
+  :: Decl
+  -> Maybe (Decl, GHC.LHsLocalBinds GHC.GhcPs)
 stripLocalBind = \case
-  L _ (ValD xvald origBind@FunBind{})
-    | let origMG = fun_matches origBind
-    , L locMG [L locMatch origMatch] <- mg_alts origMG
-    , let origGRHSs = m_grhss origMatch
-    , [L _ (GRHS _ _ (L loc2 _))] <- grhssGRHSs origGRHSs ->
-      let loc1 = getLoc (fun_id origBind)
+  GHC.L _ (GHC.ValD xvald origBind@GHC.FunBind{})
+    | let origMG = GHC.fun_matches origBind
+    , GHC.L locMG [GHC.L locMatch origMatch] <- GHC.mg_alts origMG
+    , let origGRHSs = GHC.m_grhss origMatch
+    , [GHC.L _ (GHC.GRHS _ _ (GHC.L loc2 _))] <- GHC.grhssGRHSs origGRHSs ->
+      let loc1 = GHC.getLoc (GHC.fun_id origBind)
           newLoc = combineSrcSpans loc1 loc2
-          withoutLocalBinds = setLocalBind (noLoc (EmptyLocalBinds noExt)) xvald origBind newLoc origMG locMG
-                                           origMatch locMatch origGRHSs
-       in Just (withoutLocalBinds, grhssLocalBinds origGRHSs)
+          withoutLocalBinds = setLocalBind (GHC.noLoc (GHC.EmptyLocalBinds noExt)) xvald origBind newLoc
+            origMG locMG origMatch locMatch origGRHSs
+       in Just (withoutLocalBinds, GHC.grhssLocalBinds origGRHSs)
   _ -> Nothing
 
 -- | Set the local binds in a HsBind.
 setLocalBind
-  :: LHsLocalBinds GHC.GhcPs
-  -> XValD GhcPs
-  -> HsBind GhcPs
-  -> SrcSpan
-  -> MatchGroup GhcPs (LHsExpr GhcPs)
-  -> SrcSpan
-  -> Match GhcPs (LHsExpr GhcPs)
-  -> SrcSpan
-  -> GRHSs GhcPs (LHsExpr GhcPs)
-  -> LHsDecl GhcPs
+  :: GHC.LHsLocalBinds GHC.GhcPs
+  -> GHC.XValD GHC.GhcPs
+  -> GHC.HsBind GHC.GhcPs
+  -> GHC.SrcSpan
+  -> GHC.MatchGroup GHC.GhcPs Expr
+  -> GHC.SrcSpan
+  -> GHC.Match GHC.GhcPs Expr
+  -> GHC.SrcSpan
+  -> GHC.GRHSs GHC.GhcPs Expr
+  -> Decl
 setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch origGRHSs =
-    L newLoc (ValD xvald newBind)
+    GHC.L newLoc (GHC.ValD xvald newBind)
   where
-    newGRHSs = origGRHSs{grhssLocalBinds = newLocalBinds}
-    newMatch = origMatch{m_grhss = newGRHSs}
-    newMG = origMG{mg_alts = L locMG [L locMatch newMatch]}
-    newBind = origBind{fun_matches = newMG}
+    newGRHSs = origGRHSs {GHC.grhssLocalBinds = newLocalBinds}
+    newMatch = origMatch {GHC.m_grhss = newGRHSs}
+    newMG = origMG {GHC.mg_alts = GHC.L locMG [GHC.L locMatch newMatch]}
+    newBind = origBind {GHC.fun_matches = newMG}
 
-#if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
-replaceWorker :: (Annotate a, Data mod)
-              => Anns
-              -> mod
-              -> AnnKeyMap
-              -> Parser (GHC.Located a)
-              -> Int
-              -> Refactoring SrcSpan
-              -> IO (Anns, mod, AnnKeyMap)
-#else
-replaceWorker :: (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a))
-              => Anns
-              -> mod
-              -> AnnKeyMap
-              -> Parser a
-              -> Int
-              -> Refactoring SrcSpan
-              -> IO (Anns, mod, AnnKeyMap)
-#endif
+replaceWorker :: forall a mod. ReplaceWorker a mod
 replaceWorker as m keyMap parser seed Replace{..} = do
   let replExprLocation = srcSpanToAnnSpan pos
       uniqueName = "template" ++ show seed
@@ -660,39 +532,32 @@ replaceWorker as m keyMap parser seed Replace{..} = do
     runStateT
       (substTransform m subts template)
       (mergeAnns as relat, keyMap)
-  let lst = listToMaybe . reverse . GHC.occNameString . GHC.rdrNameOcc
-#if __GLASGOW_HASKELL__ >= 900
-      adjacent (srcSpanEnd -> RealSrcLoc loc1 _) (srcSpanStart -> RealSrcLoc loc2 _) = loc1 == loc2
-#else
-      adjacent (srcSpanEnd -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) = loc1 == loc2
-#endif
+  let lst = listToMaybe . reverse . occNameString . rdrNameOcc
+      adjacent (GHC.srcSpanEnd -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) = loc1 == loc2
       adjacent _ _ = False
 
       -- Return @True@ if the start position of the two spans are on the same line, and differ
       -- by the given number of columns.
-      diffStartCols :: Int -> SrcSpan -> SrcSpan -> Bool
-#if __GLASGOW_HASKELL__ >= 900
-      diffStartCols x (srcSpanStart -> RealSrcLoc loc1 _) (srcSpanStart -> RealSrcLoc loc2 _) =
-#else
-      diffStartCols x (srcSpanStart -> RealSrcLoc loc1) (srcSpanStart -> RealSrcLoc loc2) =
-#endif
-        srcLocLine loc1 == srcLocLine loc2 && srcLocCol loc1 - srcLocCol loc2 == x
+      diffStartCols :: Int -> GHC.SrcSpan -> GHC.SrcSpan -> Bool
+      diffStartCols x (GHC.srcSpanStart -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) =
+        GHC.srcLocLine loc1 == GHC.srcLocLine loc2 && GHC.srcLocCol loc1 - GHC.srcLocCol loc2 == x
       diffStartCols _ _ _ = False
 
       -- Add a space if needed, so that we avoid refactoring `y = f(x)` into `y = fx`.
       ensureAppSpace :: Anns -> Anns
       ensureAppSpace = fromMaybe id $ do
-        (L _ (HsVar _ (L _ newName))) :: LHsExpr GhcPs <- cast newExpr
+        (GHC.L _ (GHC.HsVar _ (GHC.L _ newName))) :: Expr <- cast newExpr
         hd <- listToMaybe $ case newName of
-          GHC.Unqual occName -> GHC.occNameString occName
-          GHC.Qual moduleName _ -> GHC.moduleNameString moduleName
-          GHC.Orig modu _ -> GHC.moduleNameString (GHC.moduleName modu)
-          GHC.Exact name -> GHC.occNameString (GHC.nameOccName name)
+          Unqual n -> occNameString n
+          Qual moduleName _ -> GHC.moduleNameString moduleName
+          Orig modu _ -> GHC.moduleNameString (GHC.moduleName modu)
+          Exact name -> occNameString (nameOccName name)
         guard $ isAlphaNum hd
-        let prev :: [LHsExpr GhcPs] =
+        let prev :: [Expr] =
               listify
                 (\case
-                   (L loc (HsVar _ (L _ rdr))) -> maybe False isAlphaNum (lst rdr) && adjacent loc pos
+                   (GHC.L loc (GHC.HsVar _ (GHC.L _ rdr))) ->
+                     maybe False isAlphaNum (lst rdr) && adjacent loc pos
                    _ -> False
                 )
                 m
@@ -705,19 +570,19 @@ replaceWorker as m keyMap parser seed Replace{..} = do
       -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
       ensureDoSpace :: Anns -> Anns
       ensureDoSpace = fromMaybe id $ do
-        let doBlocks :: [LHsExpr GhcPs] =
+        let doBlocks :: [Expr] =
               listify
                 (\case
-                  (L _ HsDo{}) -> True
+                  (GHC.L _ GHC.HsDo{}) -> True
                   _ -> False
                 )
                 m
-            doBlocks' :: [(SrcSpan, Int)]
+            doBlocks' :: [(GHC.SrcSpan, Int)]
             doBlocks' =
               map
                 ( \case
-                    L loc (HsDo _ MDoExpr{} _) -> (loc, 3)
-                    L loc _ -> (loc, 2)
+                    GHC.L loc (GHC.HsDo _ GHC.MDoExpr{} _) -> (loc, 3)
+                    GHC.L loc _ -> (loc, 2)
                 )
                 doBlocks
         _ <- find (\(ss, len) -> diffStartCols len pos ss) doBlocks'
@@ -801,8 +666,8 @@ doRename ss = everywhere (mkT rename)
 -}
 
 addExtensionsToFlags
-  :: [Extension] -> [Extension] -> FilePath -> DynFlags
-  -> IO (Either String DynFlags)
+  :: [Extension] -> [Extension] -> FilePath -> GHC.DynFlags
+  -> IO (Either String GHC.DynFlags)
 addExtensionsToFlags es ds fp flags = catchErrors $ do
     (stringToStringBuffer -> buf) <- readFileUTF8' fp
     let opts = getOptions flags buf fp
@@ -810,10 +675,10 @@ addExtensionsToFlags es ds fp flags = catchErrors $ do
                       . flip (foldl' xopt_set) es
                       $ flags
     (withPragmas, _, _) <- parseDynamicFilePragma withExts opts
-    pure . Right $ withPragmas `gopt_set` Opt_KeepRawTokenStream
+    pure . Right $ withPragmas `gopt_set` GHC.Opt_KeepRawTokenStream
   where
     catchErrors = handleGhcException (pure . Left . show)
-                . handleSourceError (pure . Left . show)
+                . GHC.handleSourceError (pure . Left . show)
 
 parseModuleWithArgs
   :: ([Extension], [Extension])
@@ -862,74 +727,8 @@ parseExtensions = addImplied . foldl' f mempty
 readExtension :: String -> Maybe Extension
 readExtension s = flagSpecFlag <$> find ((== s) . flagSpecName) xFlags
 
-#if __GLASGOW_HASKELL__ < 900
--- | Copied from "Language.Haskell.GhclibParserEx.GHC.Driver.Session", in order to
--- support GHC 8.6
-impliedXFlags :: [(Extension, Bool, Extension)]
-impliedXFlags
--- See Note [Updating flag description in the User's Guide]
-  = [ (RankNTypes,                True, ExplicitForAll)
-    , (QuantifiedConstraints,     True, ExplicitForAll)
-    , (ScopedTypeVariables,       True, ExplicitForAll)
-    , (LiberalTypeSynonyms,       True, ExplicitForAll)
-    , (ExistentialQuantification, True, ExplicitForAll)
-    , (FlexibleInstances,         True, TypeSynonymInstances)
-    , (FunctionalDependencies,    True, MultiParamTypeClasses)
-    , (MultiParamTypeClasses,     True, ConstrainedClassMethods)  -- c.f. #7854
-    , (TypeFamilyDependencies,    True, TypeFamilies)
-
-    , (RebindableSyntax, False, ImplicitPrelude)      -- NB: turn off!
-
-    , (DerivingVia, True, DerivingStrategies)
-
-    , (GADTs,            True, GADTSyntax)
-    , (GADTs,            True, MonoLocalBinds)
-    , (TypeFamilies,     True, MonoLocalBinds)
-
-    , (TypeFamilies,     True, KindSignatures)  -- Type families use kind signatures
-    , (PolyKinds,        True, KindSignatures)  -- Ditto polymorphic kinds
-
-    -- TypeInType is now just a synonym for a couple of other extensions.
-    , (TypeInType,       True, DataKinds)
-    , (TypeInType,       True, PolyKinds)
-    , (TypeInType,       True, KindSignatures)
-
-    -- AutoDeriveTypeable is not very useful without DeriveDataTypeable
-    , (AutoDeriveTypeable, True, DeriveDataTypeable)
-
-    -- We turn this on so that we can export associated type
-    -- type synonyms in subordinates (e.g. MyClass(type AssocType))
-    , (TypeFamilies,     True, ExplicitNamespaces)
-    , (TypeOperators, True, ExplicitNamespaces)
-
-    , (ImpredicativeTypes,  True, RankNTypes)
-
-        -- Record wild-cards implies field disambiguation
-        -- Otherwise if you write (C {..}) you may well get
-        -- stuff like " 'a' not in scope ", which is a bit silly
-        -- if the compiler has just filled in field 'a' of constructor 'C'
-    , (RecordWildCards,     True, DisambiguateRecordFields)
-
-    , (ParallelArrays, True, ParallelListComp)
-
-    , (JavaScriptFFI, True, InterruptibleFFI)
-
-    , (DeriveTraversable, True, DeriveFunctor)
-    , (DeriveTraversable, True, DeriveFoldable)
-
-    -- Duplicate record fields require field disambiguation
-    , (DuplicateRecordFields, True, DisambiguateRecordFields)
-
-    , (TemplateHaskell, True, TemplateHaskellQuotes)
-    , (Strict, True, StrictData)
-#if __GLASGOW_HASKELL__ >= 810
-    , (StandaloneKindSignatures, False, CUSKs)
-#endif
-  ]
-#endif
-
 -- TODO: This is added to avoid a breaking change. We should remove it and
 -- directly pass the `DynFlags` as arguments, before the 0.10 release.
-dynFlagsRef :: IORef (Maybe DynFlags)
+dynFlagsRef :: IORef (Maybe GHC.DynFlags)
 dynFlagsRef = unsafePerformIO $ newIORef Nothing
 {-# NOINLINE dynFlagsRef #-}
