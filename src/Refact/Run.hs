@@ -2,43 +2,39 @@
 
 module Refact.Run (refactMain, runPipe) where
 
-import Language.Haskell.GHC.ExactPrint.Utils
-
-import Refact.Apply (parseExtensions)
-import qualified Refact.Types as R
-import Refact.Types hiding (SrcSpan)
-import Refact.Fixity
-import Refact.Internal
-  ( Verbosity(..)
-  , apply
-  , onError
-  , parseModuleWithArgs
-  )
-import Refact.Options (Options(..), optionsWithHelp)
-
 import Control.Monad
 import Data.List hiding (find)
 import Data.Maybe
 import Data.Version
-import Options.Applicative
-import System.IO.Extra
-import System.FilePath.Find
-import System.Exit
-import qualified System.PosixCompat.Files as F
-
-import Paths_apply_refact
-
 import Debug.Trace
+import Language.Haskell.GHC.ExactPrint.Utils
+import Options.Applicative
+import Paths_apply_refact
+import Refact.Apply (parseExtensions)
+import Refact.Fixity
+import Refact.Internal
+  ( Verbosity (..),
+    apply,
+    onError,
+    parseModuleWithArgs,
+  )
+import Refact.Options (Options (..), optionsWithHelp)
+import Refact.Types hiding (SrcSpan)
+import qualified Refact.Types as R
+import System.Exit
+import System.FilePath.Find
+import System.IO.Extra
+import qualified System.PosixCompat.Files as F
 
 refactMain :: IO ()
 refactMain = do
-  o@Options{..} <- execParser optionsWithHelp
+  o@Options {..} <- execParser optionsWithHelp
   when optionsVersion (putStr ("v" ++ showVersion version) >> exitSuccess)
   unless (isJust optionsTarget || isJust optionsRefactFile) . die $
     "Must specify either the target file, or the refact file, or both.\n"
-    ++ "If either the target file or the refact file is not specified, "
-    ++ "it will be read from stdin.\n"
-    ++ "To show usage, run 'refactor -h'."
+      ++ "If either the target file or the refact file is not specified, "
+      ++ "it will be read from stdin.\n"
+      ++ "To show usage, run 'refactor -h'."
   case optionsTarget of
     Nothing ->
       withTempFile $ \fp -> do
@@ -70,10 +66,10 @@ filterFilename = do
   where
     p x
       | "Setup.hs" `isInfixOf` x = False
-      | otherwise                 = True
+      | otherwise = True
 
-runPipe :: Options -> FilePath  -> IO ()
-runPipe Options{..} file = do
+runPipe :: Options -> FilePath -> IO ()
+runPipe Options {..} file = do
   let verb = optionsVerbosity
   rawhints <- getHints optionsRefactFile
   when (verb == Loud) (traceM "Got raw hints")
@@ -81,23 +77,27 @@ runPipe Options{..} file = do
       n = length inp
   when (verb == Loud) (traceM $ "Read " ++ show n ++ " hints")
 
-  output <- if null inp then readFileUTF8' file else do
-    when (verb == Loud) (traceM "Parsing module")
-    let (enabledExts, disabledExts, invalidExts) = parseExtensions optionsLanguage
-    unless (null invalidExts) . when (verb >= Normal) . putStrLn $
-      "Invalid extensions: " ++ intercalate ", " invalidExts
-    (as, m) <- either (onError "runPipe") (uncurry applyFixities)
-                =<< parseModuleWithArgs (enabledExts, disabledExts) file
-    when optionsDebug (putStrLn (showAnnData as 0 m))
-    apply optionsPos optionsStep inp (Just file) verb as m
+  output <-
+    if null inp
+      then readFileUTF8' file
+      else do
+        when (verb == Loud) (traceM "Parsing module")
+        let (enabledExts, disabledExts, invalidExts) = parseExtensions optionsLanguage
+        unless (null invalidExts) . when (verb >= Normal) . putStrLn $
+          "Invalid extensions: " ++ intercalate ", " invalidExts
+        (as, m) <-
+          either (onError "runPipe") (uncurry applyFixities)
+            =<< parseModuleWithArgs (enabledExts, disabledExts) file
+        when optionsDebug (putStrLn (showAnnData as 0 m))
+        apply optionsPos optionsStep inp (Just file) verb as m
 
   if optionsInplace && isJust optionsTarget
     then writeFileUTF8 file output
     else case optionsOutput of
-          Nothing -> putStr output
-          Just f  -> do
-            when (verb == Loud) (traceM $ "Writing result to " ++ f)
-            writeFileUTF8 f output
+      Nothing -> putStr output
+      Just f -> do
+        when (verb == Loud) (traceM $ "Writing result to " ++ f)
+        writeFileUTF8 f output
 
 getHints :: Maybe FilePath -> IO String
 getHints (Just hintFile) = readFileUTF8' hintFile
