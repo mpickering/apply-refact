@@ -11,7 +11,6 @@ module Refact.Compat (
   SourceText (..),
 
   -- * DynFlags / GHC.Driver.Session
-  DynFlags,
   FlagSpec (..),
   GeneralFlag (..),
   gopt_set,
@@ -75,13 +74,6 @@ module Refact.Compat (
   combineSrcSpans,
   composeSrcSpan,
   decomposeSrcSpan,
-  isSubspanOf,
-  noLoc,
-  srcLocCol,
-  srcLocLine,
-  srcSpanEnd,
-  srcSpanStart,
-  unLoc,
 
   -- * StringBuffer
   stringToStringBuffer,
