@@ -1,0 +1,2 @@
+foo :: (HasCallStack) => Int
+foo = undefined
