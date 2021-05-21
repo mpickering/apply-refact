@@ -1,0 +1,1 @@
+[("tests/examples/Bracket46.hs:1:8-23: Warning: Redundant bracket\nFound:\n  ((HasCallStack))\nPerhaps:\n  HasCallStack\n",[Replace {rtype = Type, pos = SrcSpan {startLine = 1, startCol = 8, endLine = 1, endCol = 24}, subts = [("x",SrcSpan {startLine = 1, startCol = 10, endLine = 1, endCol = 22})], orig = "x"}])]

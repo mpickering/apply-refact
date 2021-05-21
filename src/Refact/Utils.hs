@@ -41,6 +41,7 @@ import Data.Data
 import Data.Generics.Schemes (something)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
+import Data.Typeable (Typeable, eqT, (:~:) (Refl))
 import qualified GHC
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types
@@ -171,11 +172,40 @@ modifyAnnKey m e1 e2 = do
   e2
     <$ modify
       ( bimap
-          ( recoverBackquotes e1 e2
+          ( dropContextParens e1 e2
+              . recoverBackquotes e1 e2
               . replaceAnnKey (mkAnnKey e1) (mkAnnKey e2) (mkAnnKey e2) parentKey
           )
           (Map.insertWith (++) (mkAnnKey e1) [mkAnnKey e2])
       )
+
+-- | When parens are removed for the entire context, e.g.,
+--
+-- @
+--    - f :: (HasCallStack) => ...
+--    + f :: HasCallStack => ...
+-- @
+--
+-- We need to remove the `AnnOpenP` and `AnnCloseP` from the corresponding `Annotation`.
+dropContextParens ::
+  forall old new.
+  (Typeable old, Typeable new) =>
+  GHC.Located old ->
+  GHC.Located new ->
+  Anns ->
+  Anns
+dropContextParens old new anns
+  | Just Refl <- eqT @old @(GHC.HsType GHC.GhcPs),
+    Just Refl <- eqT @new @(GHC.HsType GHC.GhcPs),
+    isParTy old,
+    not (isParTy new),
+    Just annOld <- Map.lookup key anns,
+    (G AnnOpenP, _) : (G AnnCloseP, _) : rest <- annsDP annOld =
+    Map.adjust (\x -> x {annsDP = rest}) key anns
+  | otherwise = anns
+  where
+    key = AnnKey (getAnnSpan old) (CN "(:)")
+    isParTy = \case (GHC.L _ GHC.HsParTy {}) -> True; _ -> False
 
 -- | When the template contains a backquoted substitution variable, but the substitute
 -- is not backquoted, we must add the corresponding 'GHC.AnnBackQuote's.
