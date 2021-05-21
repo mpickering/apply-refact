@@ -1,3 +1,5 @@
+  * #113, Fix Annotation when context parens are removed
+
 v0.9.2.0
 
   * #110, Support GHC 9.0.1
