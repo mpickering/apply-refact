@@ -4,6 +4,7 @@
 
 module Refact.Utils
   ( -- * Synonyms
+    Module,
     Stmt,
     Expr,
     Decl,
@@ -11,7 +12,10 @@ module Refact.Utils
     Pat,
     Type,
     Import,
+    FunBind,
     AnnKeyMap,
+    pattern RealSrcLoc',
+    pattern RealSrcSpan',
 
     -- * Monad
     M,
@@ -23,6 +27,11 @@ module Refact.Utils
     getAnnSpan,
     toGhcSrcSpan,
     toGhcSrcSpan',
+    annSpanToSrcSpan,
+    srcSpanToAnnSpan,
+    setAnnSpanFile,
+    setSrcSpanFile,
+    setRealSrcSpanFile,
     findParent,
     foldAnnKey,
   )
@@ -49,9 +58,15 @@ import Refact.Compat
   ( AnnKeyMap,
     AnnKeywordId (..),
     FastString,
+    FunBind,
+    Module,
     annSpanToSrcSpan,
     mkFastString,
+    setAnnSpanFile,
+    setRealSrcSpanFile,
+    setSrcSpanFile,
     srcSpanToAnnSpan,
+    pattern RealSrcLoc',
     pattern RealSrcSpan',
   )
 import qualified Refact.Types as R

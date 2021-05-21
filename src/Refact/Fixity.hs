@@ -10,7 +10,7 @@ import Data.Maybe
 import Data.Tuple
 import qualified GHC
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcRn, GhcTc)
-import Refact.Compat (Fixity (..), Module, SourceText (..), occNameString, rdrNameOcc, srcSpanToAnnSpan)
+import Refact.Compat (Fixity (..), SourceText (..), occNameString, rdrNameOcc)
 import Refact.Utils
 
 -- | Rearrange infix expressions to account for fixity.
