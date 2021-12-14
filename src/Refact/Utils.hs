@@ -37,7 +37,7 @@ module Refact.Utils
   )
 where
 
-import Control.Monad.Trans.State (StateT, gets, modify)
+import Control.Monad.Trans.State.Strict (StateT, gets, modify')
 import Data.Bifunctor (bimap)
 import Data.Data
   ( Data (gmapQi, toConstr),
@@ -185,7 +185,7 @@ modifyAnnKey m e1 e2 = do
   as <- gets fst
   let parentKey = fromMaybe (mkAnnKey e2) (findParent (getAnnSpan e2) as m)
   e2
-    <$ modify
+    <$ modify'
       ( bimap
           ( dropContextParens e1 e2
               . recoverBackquotes e1 e2
