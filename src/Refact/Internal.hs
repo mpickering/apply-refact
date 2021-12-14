@@ -24,7 +24,7 @@ import Control.Exception
 import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Maybe (MaybeT (..))
-import Control.Monad.Trans.State
+import Control.Monad.Trans.State.Strict
 import Data.Char (isAlphaNum)
 import Data.Data
 import Data.Foldable (foldlM, for_)

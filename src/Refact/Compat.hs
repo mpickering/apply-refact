@@ -158,11 +158,10 @@ import GHC.Hs hiding (Pat, Stmt)
 import HsSyn hiding (Pat, Stmt)
 #endif
 
-import Control.Monad.Trans.State ( StateT )
-import Data.Data ( Data )
+import Control.Monad.Trans.State.Strict (StateT)
+import Data.Data (Data)
 import Data.Map.Strict (Map)
 import qualified GHC
-import Language.Haskell.GHC.ExactPrint.Annotate (Annotate)
 import Language.Haskell.GHC.ExactPrint.Delta ( relativiseApiAnns )
 import Language.Haskell.GHC.ExactPrint.Parsers (Parser)
 import Language.Haskell.GHC.ExactPrint.Types
@@ -321,7 +320,7 @@ type DoGenReplacement ast a =
 
 #if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
 type ReplaceWorker a mod =
-  (Annotate a, Data mod) =>
+  (Data a, Data mod) =>
   Anns ->
   mod ->
   AnnKeyMap ->
@@ -331,7 +330,7 @@ type ReplaceWorker a mod =
   IO (Anns, mod, AnnKeyMap)
 #else
 type ReplaceWorker a mod =
-  (Annotate a, HasSrcSpan a, Data mod, Data (SrcSpanLess a)) =>
+  (Data a, HasSrcSpan a, Data mod, Data (SrcSpanLess a)) =>
   Anns ->
   mod ->
   AnnKeyMap ->
