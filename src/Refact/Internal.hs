@@ -41,6 +41,7 @@ import qualified Data.Set as Set
 import Data.Tuple.Extra
 import Debug.Trace
 import qualified GHC
+import qualified GHC.Paths
 import qualified GHC.Types.Name.Reader as GHC
 import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
@@ -329,20 +330,25 @@ runRefactoring m = \case
       ModuleName -> replaceWorker m (parseModuleName (pos r)) seed r
       Import -> replaceWorker m parseImport seed r
   -- ModifyComment {..} -> pure (Map.map go as, m, keyMap)
-  ModifyComment {..} -> pure (go m)
+  -- ModifyComment {..} -> pure (go m)
+  ModifyComment {..} -> pure (modifyComment m)
     where
-      -- go a@Ann {annPriorComments, annsDP} =
-      --   a
-      --     { annsDP = map changeComment annsDP,
-      --       annPriorComments = map (first change) annPriorComments
-      --     }
-      -- changeComment (AnnComment d, dp) = (AnnComment (change d), dp)
-      -- changeComment e = e
-      -- change old@Comment {..} =
-      --   if ss2pos (annSpanToSrcSpan commentIdentifier) == ss2pos pos
-      --     then old {commentContents = newComment}
-      --     else old
-      go = undefined
+      modifyComment = transformBi go
+      newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
+      newTok  (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
+      newTok  (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
+      newTok  (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
+      newTok  (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
+      newTok  (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+      newTok  (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+      newTok  (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+      newTok  (GHC.EpaEofComment) = GHC.EpaEofComment
+
+      go :: GHC.LEpaComment -> GHC.LEpaComment
+      go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
+        if ss2pos l == ss2pos (GHC.realSrcSpan pos)
+          then (GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r))
+          else old
   Delete {rtype, pos} -> pure (f m)
     where
       annSpan = srcSpanToAnnSpan pos
@@ -350,10 +356,24 @@ runRefactoring m = \case
         Stmt -> doDeleteStmt ((/= annSpan) . getAnnSpanA)
         Import -> doDeleteImport ((/= annSpan) . getAnnSpanA)
         _ -> id
-  InsertComment {..} -> do
-    -- exprkey <- mkAnnKey <$> findOrError @(GHC.HsDecl GHC.GhcPs) m (srcSpanToAnnSpan pos)
-    -- pure (insertComment exprkey newComment as, m, keyMap)
-    undefined
+  InsertComment {..} -> pure (addComment m)
+    where
+      addComment = transformBi go
+      r = srcSpanToAnnSpan  pos
+      go :: (GHC.LHsDecl GHC.GhcPs) -> (GHC.LHsDecl GHC.GhcPs)
+      go old@(GHC.L l d) =
+        if ss2pos (srcSpanToAnnSpan $ GHC.locA l) == ss2pos r
+          then
+            let
+              dp = case getEntryDP old of
+                GHC.SameLine 0 -> GHC.DifferentLine 1 1
+                dp' -> dp'
+              (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 1)
+              comment = GHC.L (GHC.Anchor r (GHC.MovedAnchor dp))
+                                     (GHC.EpaComment (GHC.EpaLineComment newComment) r)
+              l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])
+            in (GHC.L l'' d')
+          else old
   RemoveAsKeyword {..} -> pure (removeAsKeyword m)
     where
       removeAsKeyword = transformBi go
@@ -364,7 +384,7 @@ runRefactoring m = \case
 
 -- droppedComments :: Anns -> Module -> AnnKeyMap -> Bool
 droppedComments :: Module -> Bool
-droppedComments m = undefined
+droppedComments m = False
 -- droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithComments
 --   where
 --     spanssWithComments =
@@ -470,7 +490,7 @@ resolveRdrName' g f old subs name =
     _ -> pure old
 
 resolveRdrName ::
-  (Data old, Data a) =>
+  (Data old, Data a, Data an, Typeable an, Monoid an) =>
   a ->
   (AnnSpan -> M (GHC.LocatedAn an old)) ->
   GHC.LocatedAn an old ->
@@ -506,8 +526,9 @@ doGenReplacement m p new old
         o = decomposeSrcSpan old
     -- (newAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
     -- put ((newAnns, newKeyMap), True)
+    let (new',_,_) = runTransform $ transferEntryDP old new
     put True
-    pure new
+    pure new'
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
   -- run the replacement on "f a = body", and add "local" back afterwards.
   -- This is useful for hints like "Eta reduce" and "Redundant where".
@@ -649,7 +670,7 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newMG = origMG {GHC.mg_alts = GHC.L locMG [GHC.L locMatch newMatch]}
     newBind = origBind {GHC.fun_matches = newMG}
 
-replaceWorker :: forall a mod. ReplaceWorker a mod
+replaceWorker :: forall a mod. (ExactPrint a) => ReplaceWorker a mod
 replaceWorker m parser seed Replace {..} = do
   let replExprLocation = srcSpanToAnnSpan pos
       uniqueName = "template" ++ show seed
@@ -661,7 +682,8 @@ replaceWorker m parser seed Replace {..} = do
 
   (newExpr, ()) <-
     runStateT
-      (substTransform m subts template)
+      -- (substTransform m subts template)
+      (substTransform m subts (makeDeltaAst template))
       -- (mergeAnns as relat, keyMap)
       ()
   let lst = listToMaybe . reverse . occNameString . rdrNameOcc
@@ -786,7 +808,7 @@ findLargestExpression :: forall an a. Data a => AnnSpan -> GHC.LocatedAn an a ->
 findLargestExpression as e@(getAnnSpanA -> l) = if l == as then Just e else Nothing
 
 findOrError ::
-  forall an a modu m.
+  forall a an modu m.
   (Typeable an, Data a, Data modu, MonadIO m) =>
   modu ->
   AnnSpan ->
@@ -840,8 +862,8 @@ parseModuleWithArgs ::
   ([Extension], [Extension]) ->
   FilePath ->
   IO (Either Errors GHC.ParsedSource)
-parseModuleWithArgs (es, ds) fp = ghcWrapper undefined $ do
-  let libdir = undefined
+parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
+  let libdir = GHC.Paths.libdir
   initFlags <- initDynFlags fp
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
   case eflags of
@@ -857,7 +879,9 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper undefined $ do
 
 
       -- pure $ postParseTransform res rigidLayout
-      pure $ postParseTransform res
+      case postParseTransform res of
+        Left e -> pure (Left e)
+        Right ast -> pure $ Right (makeDeltaAst ast)
 
 -- old
 -- postParseTransform

@@ -39,16 +39,22 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsInplace       = False
                   , optionsOutput        = Just outfile
                   , optionsRefactFile    = Just rfile
-                  , optionsVerbosity     = Silent
+                  -- , optionsVerbosity     = Silent
+                  , optionsVerbosity     = Loud
                   , optionsStep          = False
                   , optionsRoundtrip     = False
-                  , optionsDebug         = False
+                  -- , optionsDebug         = False
+                  , optionsDebug         = True
                   , optionsVersion       = False
                   , optionsLanguage      = ["LambdaCase"]
                   , optionsPos           = Nothing
                   }
           action =
-            hSilence [stderr] $ runPipe topts fp
+            -- hSilence [stderr] $ runPipe topts fp
+            runPipe topts fp
           diffCmd = \ref new -> ["diff", "-u", ref, new]
           testFn  = if fp `elem` expectedFailures then expectFail else id
       in testFn $ goldenVsFileDiff fp diffCmd (fp <.> "expected") outfile action
+
+tt = defaultMain . mkTests =<<
+   pure [ "tests/examples/Import6.hs" ]

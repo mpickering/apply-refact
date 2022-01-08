@@ -39,6 +39,7 @@ module Refact.Utils
 where
 
 import Control.Monad.Trans.State.Strict (StateT, gets, modify')
+import Control.Monad.IO.Class (MonadIO (..))
 import Data.Bifunctor (bimap)
 import Data.Data
   ( Data (gmapQi, toConstr),
@@ -73,6 +74,7 @@ import Refact.Compat
   )
 import qualified Refact.Types as R
 import Unsafe.Coerce (unsafeCoerce)
+import Language.Haskell.GHC.ExactPrint.Utils (showAst)
 
 -- Types
 -- type M a = StateT (Anns, AnnKeyMap) IO a
@@ -191,6 +193,12 @@ getAnnSpan = srcSpanToAnnSpan . GHC.getLoc
 --   GHC.Located old ->
 --   GHC.Located new ->
 --   M (GHC.Located new)
+modifyAnnKey ::
+  (Data mod, Data t, Data old, Data new, Monoid t, Typeable t) =>
+  mod ->
+  GHC.LocatedAn t old ->
+  GHC.LocatedAn t new ->
+  M (GHC.LocatedAn t new)
 modifyAnnKey m e1 e2 = do
   -- as <- gets fst
   -- let parentKey = fromMaybe (mkAnnKey e2) (findParent (getAnnSpan e2) as m)
@@ -203,7 +211,17 @@ modifyAnnKey m e1 e2 = do
   --         )
   --         (Map.insertWith (++) (mkAnnKey e1) [mkAnnKey e2])
   --     )
-  undefined
+  -- liftIO $ putStrLn $ "modifyAnnKey:m" ++ showAst m
+
+  -- AZ: At this stage e1 is the template of replacement, e2 is the
+  -- thing being replaced. We need to copy the top level annotations
+  -- from e2 to e1
+
+  liftIO $ putStrLn $ "modifyAnnKey:e1" ++ showAst e1
+  liftIO $ putStrLn $ "modifyAnnKey:e2" ++ showAst e2
+  let (e2',_,_) = runTransform $ transferEntryDP e1 e2
+  liftIO $ putStrLn $ "modifyAnnKey:e2'" ++ showAst e2'
+  return e2'
 
 -- | When parens are removed for the entire context, e.g.,
 --
