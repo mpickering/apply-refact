@@ -871,12 +871,7 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
     Left err -> pure . Left $ mkErr initFlags GHC.noSrcSpan err
     Right flags -> do
       liftIO $ writeIORef' dynFlagsRef (Just flags)
-      -- res <- parseModuleApiAnnsWithCppInternal defaultCppOptions flags fp
       res <- liftIO $ parseModuleEpAnnsWithCpp libdir defaultCppOptions fp
-
-      -- -- res <- parseModuleApiAnnsWithCpp defaultCppOptions origFile
-      -- res <- parseModuleEpAnnsWithCpp libdir defaultCppOptions origFile
-
 
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
@@ -886,7 +881,7 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
 -- old
 -- postParseTransform
 --   :: Either a (ApiAnns, [Comment], DynFlags, ParsedSource)
---   -> DeltaOptions -> Either a (Anns, ParsedSource) 
+--   -> DeltaOptions -> Either a (Anns, ParsedSource)
 -- new
 -- postParseTransform
 --   :: Either a ([GHC.LEpaComment], GHC.DynFlags, GHC.ParsedSource)

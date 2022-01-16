@@ -178,7 +178,7 @@ findParentWorker oldSS as a
 
 getAnnSpanA :: forall an a. GHC.LocatedAn an a -> AnnSpan
 getAnnSpanA = srcSpanToAnnSpan . GHC.getLocA
-  
+
 getAnnSpan :: forall a. GHC.Located a -> AnnSpan
 getAnnSpan = srcSpanToAnnSpan . GHC.getLoc
 
