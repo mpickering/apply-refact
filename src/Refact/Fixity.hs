@@ -12,7 +12,8 @@ import Data.Tuple
 import qualified GHC
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcRn, GhcTc)
-import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+-- import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 import Refact.Compat (Fixity (..), SourceText (..), occNameString, rdrNameOcc)
 import Refact.Utils
 
@@ -98,15 +99,18 @@ mkOpAppRn fs loc an e1@(GHC.L _ (GHC.NegApp an' neg_arg neg_name)) op2 fix2 e2
       -- let oldKey = mkAnnKey neg_arg
       -- oldAnn <- gets $ Map.findWithDefault annNone oldKey
       new_e <- mkOpAppRn fs loc' an neg_arg op2 fix2 e2
+      -- let (new_e',_,_) = runTransform $ transferEntryDP neg_arg new_e
+      let new_e' = setEntryDP new_e (GHC.SameLine 0)
       -- let newKey = mkAnnKey new_e
       -- moveDelta oldAnn oldKey newKey
-      let res = GHC.L loc (GHC.NegApp an' new_e neg_name)
+      let res = setEntryDP (GHC.L loc (GHC.NegApp an' new_e' neg_name)) (GHC.SameLine 0)
           -- key = mkAnnKey res
           -- ak = AnnKey (srcSpanToAnnSpan loc) (CN "OpApp")
       -- opAnn <- gets (fromMaybe annNone . Map.lookup ak)
       -- negAnns <- gets (fromMaybe annNone . Map.lookup (mkAnnKey e1))
       -- modify $ Map.insert key (annNone {annEntryDelta = annEntryDelta opAnn, annsDP = annsDP negAnns})
       -- modify $ Map.delete (mkAnnKey e1)
+      liftIO $ putStrLn $ "mkOpAppRn:2:res" ++ showAst res
       return res
   where
     loc' = GHC.combineLocsA neg_arg e2

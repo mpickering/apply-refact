@@ -49,7 +49,8 @@ import Data.Data
     typeRep,
     typeRepTyCon,
   )
-import Data.Generics.Schemes (something)
+import Data.Typeable
+import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something, everything)
 import qualified Data.Map.Strict as Map
 import Data.Maybe (fromMaybe, isJust)
 import Data.Typeable (Typeable, eqT, (:~:) (Refl))
@@ -74,7 +75,8 @@ import Refact.Compat
   )
 import qualified Refact.Types as R
 import Unsafe.Coerce (unsafeCoerce)
-import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+-- import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 
 -- Types
 -- type M a = StateT (Anns, AnnKeyMap) IO a
@@ -217,9 +219,11 @@ modifyAnnKey m e1 e2 = do
   -- thing being replaced. We need to copy the top level annotations
   -- from e2 to e1
 
+
   liftIO $ putStrLn $ "modifyAnnKey:e1" ++ showAst e1
   liftIO $ putStrLn $ "modifyAnnKey:e2" ++ showAst e2
-  let (e2',_,_) = runTransform $ transferEntryDP e1 e2
+  let e2_0 = recoverBackquotes e1 e2
+  let (e2',_,_) = runTransform $ transferEntryDP e1 e2_0
   liftIO $ putStrLn $ "modifyAnnKey:e2'" ++ showAst e2'
   return e2'
 
@@ -257,7 +261,13 @@ dropContextParens old new anns
 --
 -- See tests/examples/Backquotes.hs for an example.
 -- recoverBackquotes :: GHC.Located old -> GHC.Located new -> Anns -> Anns
-recoverBackquotes (getAnnSpan -> old) (getAnnSpan -> new) anns
+
+recoverBackquotes :: forall t old new.
+                (Data t, Data old, Data new, Monoid t, Typeable t)
+                => GHC.LocatedAn t old
+                -> GHC.LocatedAn t new
+                -> GHC.LocatedAn t new
+recoverBackquotes old new
   -- | Just annOld <- Map.lookup (AnnKey old (CN "Unqual")) anns,
   --   ( (G AnnBackquote, DP (i, j))
   --       : rest@( (G AnnVal, _)
@@ -272,7 +282,15 @@ recoverBackquotes (getAnnSpan -> old) (getAnnSpan -> new) anns
   --         _ -> annNew
   --    in Map.adjust f (AnnKey new (CN "Unqual")) anns
   -- | otherwise = anns
-  = undefined
+  = new
+  -- = case cast (old,new) :: Maybe (GHC.LHsExpr GHC.GhcPs, GHC.LHsExpr GHC.GhcPs) of
+  --     Just (GHC.L la (GHC.HsVar {}),GHC.L ln b@(GHC.HsVar {})) -> GHC.L ln b
+  --     _ -> new
+  --   -- doTrans :: forall an b. (Typeable an, Data b) => modu -> Maybe (GHC.LocatedAn an b)
+  --   -- doTrans = something (mkQ Nothing (doit old new))
+  --   -- doit :: GHC.LHsExpr GHC.GhcPs -> GHC.LHsExpr GHC.GhcPs -> Maybe (GHC.LHsExpr GHC.GhcPs)
+  --   -- doit a@(GHC.L la (GHC.HsVar {})) b@(GHC.L lb (GHC.HsVar {})) = Just b
+  --   -- doit _ _ = Nothing
 
 -- | Lower level version of @modifyAnnKey@
 -- replaceAnnKey :: AnnKey -> AnnKey -> AnnKey -> AnnKey -> Anns -> Anns
