@@ -29,7 +29,7 @@ import Data.Char (isAlphaNum)
 import Data.Data
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
-import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something, everywhere)
+import Data.Generics (everywhereM, extM, listify, mkM, mkQ, mkT, something, everywhere)
 import Data.Generics.Uniplate.Data (transformBi, transformBiM, universeBi)
 import Data.IORef.Extra
 import Data.List.Extra
@@ -732,28 +732,21 @@ replaceWorker m parser seed Replace {..} = do
 
       -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
       -- ensureDoSpace :: Anns -> Anns
-      ensureDoSpace = undefined
-      -- ensureDoSpace = fromMaybe id $ do
-      --   let doBlocks :: [Expr] =
-      --         listify
-      --           ( \case
-      --               (GHC.L _ GHC.HsDo {}) -> True
-      --               _ -> False
-      --           )
-      --           m
-      --       doBlocks' :: [(GHC.SrcSpan, Int)]
-      --       doBlocks' =
-      --         map
-      --           ( \case
-      --               GHC.L loc (GHC.HsDo _ GHC.MDoExpr {} _) -> (loc, 3)
-      --               GHC.L loc _ -> (loc, 2)
-      --           )
-      --           doBlocks
-      --   _ <- find (\(ss, len) -> diffStartCols len pos ss) doBlocks'
-      --   pure . flip Map.adjust (mkAnnKey newExpr) $ \ann ->
-      --     if annEntryDelta ann == DP (0, 0)
-      --       then ann {annEntryDelta = DP (0, 1)}
-      --       else ann
+      ensureSpace :: forall t. (Data t) => t -> t
+      ensureSpace = everywhere (mkT ensureExprSpace)
+
+      ensureExprSpace :: Expr -> Expr
+      ensureExprSpace e@(GHC.L l (GHC.HsDo an v (GHC.L ls stmts))) = e' -- ensureDoSpace
+        where
+          manchor_op GHC.EpAnnNotUsed = Nothing
+          manchor_op (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
+          e' = if manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
+                  manchor_op (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
+            else e
+      ensureExprSpace e@(GHC.L _ (GHC.HsVar _ (GHC.L _ newName))) = e -- ensureAppSpace
+      ensureExprSpace e = e
+
 
       replacementPred = (== replExprLocation) . getAnnSpanA
 
@@ -766,7 +759,7 @@ replaceWorker m parser seed Replace {..} = do
   runStateT (transformation m) False >>= \case
     -- (finalM, ((ensureDoSpace . ensureAppSpace -> finalAs, finalKeyMap), True)) ->
     (finalM, True) ->
-      pure finalM
+      pure (ensureSpace finalM)
     -- Failed to find a replacment so don't make any changes
     -- _ -> pure (as, m, keyMap)
     _ -> pure m
