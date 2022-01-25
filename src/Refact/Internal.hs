@@ -29,7 +29,7 @@ import Data.Char (isAlphaNum)
 import Data.Data
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
-import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something)
+import Data.Generics (everywhereM, extM, listify, mkM, mkQ, something, everywhere)
 import Data.Generics.Uniplate.Data (transformBi, transformBiM, universeBi)
 import Data.IORef.Extra
 import Data.List.Extra
@@ -221,16 +221,14 @@ runRefactorings _ m [] = pure m
 
 runRefactorings' ::
   Verbosity ->
-  -- Anns ->
   Module ->
   [Refactoring GHC.SrcSpan] ->
-  -- StateT Int IO (Maybe (Anns, Module))
   StateT Int IO (Maybe Module)
 runRefactorings' verb m0 rs = do
   seed <- get
   m <- foldlM runRefactoring m0 rs
   -- if droppedComments as m keyMap
-  if droppedComments m
+  if droppedComments rs m0 m
     then do
       put seed
       when (verb >= Normal) . traceM $
@@ -312,11 +310,8 @@ data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 -- | Peform a @Refactoring@.
 runRefactoring ::
   Data a =>
-  -- Anns ->
   a ->
-  -- AnnKeyMap ->
   Refactoring GHC.SrcSpan ->
-  -- StateT Int IO (Anns, a, AnnKeyMap)
   StateT Int IO a
 runRefactoring m = \case
   r@Replace {} -> do
@@ -331,26 +326,7 @@ runRefactoring m = \case
       R.Match -> replaceWorker m parseMatch seed r
       ModuleName -> replaceWorker m (parseModuleName (pos r)) seed r
       Import -> replaceWorker m parseImport seed r
-  -- ModifyComment {..} -> pure (Map.map go as, m, keyMap)
-  -- ModifyComment {..} -> pure (go m)
-  ModifyComment {..} -> pure (modifyComment m)
-    where
-      modifyComment = transformBi go
-      newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
-      newTok  (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
-      newTok  (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
-      newTok  (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
-      newTok  (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
-      newTok  (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
-      newTok  (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
-      newTok  (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
-      newTok  (GHC.EpaEofComment) = GHC.EpaEofComment
-
-      go :: GHC.LEpaComment -> GHC.LEpaComment
-      go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
-        if ss2pos l == ss2pos (GHC.realSrcSpan pos)
-          then (GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r))
-          else old
+  ModifyComment {..} -> pure (modifyComment pos newComment m)
   Delete {rtype, pos} -> pure (f m)
     where
       annSpan = srcSpanToAnnSpan pos
@@ -384,9 +360,39 @@ runRefactoring m = \case
         | srcSpanToAnnSpan (GHC.locA l) == srcSpanToAnnSpan pos = GHC.L l (i {GHC.ideclAs = Nothing})
         | otherwise = imp
 
--- droppedComments :: Anns -> Module -> AnnKeyMap -> Bool
-droppedComments :: Module -> Bool
-droppedComments m = False
+
+modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
+modifyComment pos newComment = transformBi go
+  where
+      newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
+      newTok  (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
+      newTok  (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
+      newTok  (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
+      newTok  (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
+      newTok  (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+      newTok  (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+      newTok  (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+      newTok  (GHC.EpaEofComment) = GHC.EpaEofComment
+
+      go :: GHC.LEpaComment -> GHC.LEpaComment
+      go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
+        if ss2pos l == ss2pos (GHC.realSrcSpan pos)
+          then (GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r))
+          else old
+
+droppedComments :: [Refactoring GHC.SrcSpan] -> Module -> Module -> Bool
+droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comments)
+  where
+    mcs = foldl' runModifyComment orig_m rs
+    runModifyComment m' (ModifyComment pos newComment) = modifyComment pos newComment m'
+    runModifyComment m' _ = m'
+
+    all_comments :: forall r. (Data r, Typeable r) => r -> [GHC.EpaComment]
+    all_comments = listify (False `mkQ` isComment )
+    isComment :: GHC.EpaComment -> Bool
+    isComment _ = True
+    orig_comments = all_comments mcs
+    current_comments = Set.fromList $ all_comments m
 -- droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithComments
 --   where
 --     spanssWithComments =
