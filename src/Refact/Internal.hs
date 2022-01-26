@@ -560,7 +560,7 @@ doGenReplacement m p new old
         GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
         newGRHSs = GHC.m_grhss newMatch
         finalLoc = combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) (GHC.getLoc new)
-        newWithLocalBinds =
+        newWithLocalBinds0 =
           setLocalBind
             newLocal
             xvald
@@ -571,6 +571,7 @@ doGenReplacement m p new old
             newMatch
             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
             newGRHSs
+        (newWithLocalBinds,_,_) = runTransform $ transferEntryDP' old newWithLocalBinds0
 
         -- Ensure the new Anns properly reflects the local binds we added back.
         addLocalBindsToAnns =
@@ -731,8 +732,13 @@ replaceWorker m parser seed Replace {..} = do
       ensureExprSpace :: Expr -> Expr
       ensureExprSpace e@(GHC.L l (GHC.HsDo an v (GHC.L ls stmts))) = e' -- ensureDoSpace
         where
-          e' = if manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
+          isDo = case v of
+            GHC.ListComp -> False
+            _ -> True
+          e' = if isDo &&
+                  manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
                   manchor_op (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            -- then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
             then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
             else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
