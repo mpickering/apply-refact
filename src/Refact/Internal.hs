@@ -698,13 +698,6 @@ replaceWorker m parser seed Replace {..} = do
       adjacent (GHC.srcSpanEnd -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) = loc1 == loc2
       adjacent _ _ = False
 
-      -- Return @True@ if the start position of the two spans are on the same line, and differ
-      -- by the given number of columns.
-      diffStartCols :: Int -> GHC.SrcSpan -> GHC.SrcSpan -> Bool
-      diffStartCols x (GHC.srcSpanStart -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) =
-        GHC.srcLocLine loc1 == GHC.srcLocLine loc2 && GHC.srcLocCol loc1 - GHC.srcLocCol loc2 == x
-      diffStartCols _ _ _ = False
-
       -- Add a space if needed, so that we avoid refactoring `y = f(x)` into `y = fx`.
       -- ensureAppSpace :: Anns -> Anns
       ensureAppSpace = undefined
@@ -738,15 +731,20 @@ replaceWorker m parser seed Replace {..} = do
       ensureExprSpace :: Expr -> Expr
       ensureExprSpace e@(GHC.L l (GHC.HsDo an v (GHC.L ls stmts))) = e' -- ensureDoSpace
         where
-          manchor_op GHC.EpAnnNotUsed = Nothing
-          manchor_op (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
           e' = if manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
                   manchor_op (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
             then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
             else e
-      ensureExprSpace e@(GHC.L _ (GHC.HsVar _ (GHC.L _ newName))) = e -- ensureAppSpace
+      ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
+        where
+          -- e' = if manchor_op (GHC.ann l) == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
+          --         manchor_op (GHC.ann la) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            e' = if False
+            then (GHC.L l (GHC.HsApp x (setEntryDP (GHC.L la a) (GHC.SameLine 1)) (GHC.L lb b)))
+            else if manchor_op (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            then(GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)) ))
+            else e
       ensureExprSpace e = e
-
 
       replacementPred = (== replExprLocation) . getAnnSpanA
 
@@ -764,6 +762,10 @@ replaceWorker m parser seed Replace {..} = do
     -- _ -> pure (as, m, keyMap)
     _ -> pure m
 replaceWorker m _ _ _ = pure m
+
+manchor_op :: GHC.EpAnn ann -> Maybe GHC.AnchorOperation
+manchor_op GHC.EpAnnNotUsed = Nothing
+manchor_op (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
 
 data NotFound = NotFound
   { nfExpected :: String,
