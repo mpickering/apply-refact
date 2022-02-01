@@ -12,7 +12,6 @@ module Refact.Internal
 
     -- * Support for runPipe in the main process
     Verbosity (..),
-    rigidLayout,
     refactOptions,
     type Errors,
     onError,
@@ -25,33 +24,27 @@ import Control.Monad
 import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.State.Strict
-import Data.Char (isAlphaNum)
 import Data.Data
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
 import Data.Generics (everywhereM, extM, listify, mkM, mkQ, mkT, something, everywhere)
-import Data.Generics.Uniplate.Data (transformBi, transformBiM, universeBi)
+import Data.Generics.Uniplate.Data (transformBi, transformBiM )
 import Data.IORef.Extra
 import Data.List.Extra
-import qualified Data.Map as Map
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.Ord (comparing)
-import Data.Set (Set)
 import qualified Data.Set as Set
 import Data.Tuple.Extra
 import Debug.Trace
 import qualified GHC
 import qualified GHC.Paths
-import qualified GHC.Types.Name.Reader as GHC
 import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.ExactPrint
--- import Language.Haskell.GHC.ExactPrint.Delta
 import Language.Haskell.GHC.ExactPrint.Parsers
--- import Language.Haskell.GHC.ExactPrint.Print
-import Language.Haskell.GHC.ExactPrint.Types hiding (GhcPs, GhcRn, GhcTc)
-import Language.Haskell.GHC.ExactPrint.Utils hiding (rs)
+import Language.Haskell.GHC.ExactPrint.Types
+import Language.Haskell.GHC.ExactPrint.Utils
 import Refact.Compat
   ( AnnSpan,
     DoGenReplacement,
@@ -59,12 +52,8 @@ import Refact.Compat
     FlagSpec (..),
     FunBind,
     Module,
-    RdrName (..),
     ReplaceWorker,
-    SrcSpanLess,
-    annSpanToSrcSpan,
-    badAnnSpan,
-    combineSrcSpans,
+    -- combineSrcSpans,
     combineSrcSpansA,
     composeSrcSpan,
     decomposeSrcSpan,
@@ -73,7 +62,6 @@ import Refact.Compat
     handleGhcException,
     impliedXFlags,
     mkErr,
-    nameOccName,
     occName,
     occNameString,
     onError,
@@ -81,7 +69,6 @@ import Refact.Compat
     parseModuleName,
     ppr,
     rdrNameOcc,
-    setAnnSpanFile,
     setSrcSpanFile,
     showSDocUnsafe,
     srcSpanToAnnSpan,
@@ -95,7 +82,7 @@ import Refact.Compat
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils
-  ( -- AnnKeyMap,
+  (
     Decl,
     Expr,
     Import,
@@ -104,11 +91,9 @@ import Refact.Utils
     Pat,
     Stmt,
     Type,
-    foldAnnKey,
-    getAnnSpan,
+    -- foldAnnKey,
     getAnnSpanA,
     modifyAnnKey,
-    replaceAnnKey,
     toGhcSrcSpan,
     toGhcSrcSpan',
   )
@@ -116,13 +101,8 @@ import System.IO.Error (mkIOError)
 import System.IO.Extra
 import System.IO.Unsafe (unsafePerformIO)
 
--- refactOptions :: PrintOptions Identity String
 refactOptions :: EPOptions Identity String
 refactOptions = stringOptions {epRigidity = RigidLayout}
-
--- rigidLayout :: DeltaOptions
--- rigidLayout = deltaOptions RigidLayout
-rigidLayout = undefined
 
 -- | Apply a set of refactorings as supplied by hlint
 apply ::
@@ -169,18 +149,7 @@ apply mpos step inp mbfile verb m0 = do
       else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
 
   liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
-  -- pure . runIdentity $ exactPrintWithOptions refactOptions m as
   pure . snd. runIdentity $ exactPrintWithOptions refactOptions m
-
--- old
--- exactPrintWithOptions :: (Annotate ast, Monoid b, Monad m)
---                       => PrintOptions m b -> Located ast -> Anns -> m b 
-
--- new
-  -- exactPrintWithOptions :: (ExactPrint ast, Monoid b, Monad m)
-  --                     => EPOptions m b
-  --                     -> ast
-  --                     -> m (ast, b)
 
 
 spans :: R.SrcSpan -> (Int, Int) -> Bool
@@ -204,10 +173,8 @@ aggregateSrcSpans = \case
 
 runRefactorings ::
   Verbosity ->
-  -- Anns ->
   Module ->
   [([Refactoring GHC.SrcSpan], R.SrcSpan)] ->
-  -- StateT Int IO (Anns, Module)
   StateT Int IO Module
 runRefactorings verb m0 ((rs, ss) : rest) = do
   runRefactorings' verb m0 rs >>= \case
@@ -227,7 +194,6 @@ runRefactorings' ::
 runRefactorings' verb m0 rs = do
   seed <- get
   m <- foldlM runRefactoring m0 rs
-  -- if droppedComments as m keyMap
   if droppedComments rs m0 m
     then do
       put seed
@@ -250,17 +216,9 @@ data LoopOption = LoopOption
     perform :: MaybeT IO Module
   }
 
--- old
--- exactPrint :: Annotate ast => Located ast -> Anns -> String
--- new
--- exactPrint :: ExactPrint ast => ast -> String
-
-
-refactoringLoop :: forall anns.
-  -- Anns ->
+refactoringLoop ::
   Module ->
   [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)] ->
-  -- MaybeT IO (Anns, Module)
   MaybeT IO Module
 refactoringLoop  m [] = pure m
 refactoringLoop m (((_, []), _) : rs) = refactoringLoop m rs
@@ -393,17 +351,6 @@ droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comm
     isComment _ = True
     orig_comments = all_comments mcs
     current_comments = Set.fromList $ all_comments m
--- droppedComments as m keyMap = any (all (`Set.notMember` allSpans)) spanssWithComments
---   where
---     spanssWithComments =
---       map (\(key, _) -> map keySpan $ key : Map.findWithDefault [] key keyMap)
---         . filter (\(_, v) -> notNull (annPriorComments v) || notNull (annFollowingComments v))
---         $ Map.toList as
-
---     keySpan (AnnKey ss _) = ss
-
---     allSpans :: Set AnnSpan
---     allSpans = Set.fromList . fmap srcSpanToAnnSpan $ universeBi m
 
 parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
@@ -468,10 +415,7 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
   resolveRdrName' subst (findOrError m) old subs name
   where
     subst :: FunBind -> Name -> M FunBind
-    subst (GHC.FunRhs n b s) new = do
-      let fakeExpr :: Pat
-          fakeExpr = GHC.L locE (GHC.VarPat GHC.noExtField new)
-          locE = GHC.noAnnSrcSpan $ GHC.getLocA new
+    subst (GHC.FunRhs _ b s) new = do
       -- Low level version as we need to combine the annotation information
       -- from the template RdrName and the original VarPat.
       -- modify . first $
@@ -507,55 +451,31 @@ resolveRdrName ::
   M (GHC.LocatedAn an old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
--- insertComment ::
---   AnnKey ->
---   String ->
---   Map.Map AnnKey Annotation ->
---   Map.Map AnnKey Annotation
-insertComment k s as =
-  -- let comment = Comment s badAnnSpan Nothing
-  --  in Map.adjust
-  --       ( \a@Ann {..} ->
-  --           a
-  --             { annPriorComments = annPriorComments ++ [(comment, DP (1, 0))],
-  --               annEntryDelta = DP (1, 0)
-  --             }
-  --       )
-  --       k
-  --       as
-  undefined
 
 -- Substitute the template into the original AST.
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
 doGenReplacement m p new old
   | p old = do
-    -- (anns, keyMap) <- gets fst
     let n = decomposeSrcSpan new
         o = decomposeSrcSpan old
-    -- (newAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
-    -- put ((newAnns, newKeyMap), True)
     let (new',_,_) = runTransform $ transferEntryDP old new
     put True
     pure new'
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
   -- run the replacement on "f a = body", and add "local" back afterwards.
   -- This is useful for hints like "Eta reduce" and "Redundant where".
-  -- | Just Refl <- eqT @(SrcSpanLess ast) @(GHC.HsDecl GHC.GhcPs),
   | Just Refl <- eqT @(GHC.LocatedA ast) @(GHC.LHsDecl GHC.GhcPs),
     GHC.L _ (GHC.ValD xvald newBind@GHC.FunBind {}) <- new,
     Just (oldNoLocal, oldLocal) <- stripLocalBind old,
-    newLoc@(RealSrcSpan' newLocReal) <- GHC.getLocA new,
+    (RealSrcSpan' newLocReal) <- GHC.getLocA new,
     p (composeSrcSpan oldNoLocal) = do
-    -- (anns, keyMap) <- gets fst
     let n = decomposeSrcSpan new
         o = decomposeSrcSpan old
-    -- (intAnns, newKeyMap) <- liftIO $ execStateT (modifyAnnKey m o n) (anns, keyMap)
     let newFile = GHC.srcSpanFile newLocReal
         newLocal :: GHC.HsLocalBinds GHC.GhcPs
         newLocal = transformBi (setSrcSpanFile newFile) oldLocal
         -- newLocalLoc = GHC.getLocA newLocal
         newLocalLoc = GHC.spanHsLocaLBinds newLocal
-        ensureLoc = combineSrcSpans newLocalLoc
         newMG = GHC.fun_matches newBind
         GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
         newGRHSs = GHC.m_grhss newMatch
@@ -573,61 +493,6 @@ doGenReplacement m p new old
             newGRHSs
         (newWithLocalBinds,_,_) = runTransform $ transferEntryDP' old newWithLocalBinds0
 
-        -- Ensure the new Anns properly reflects the local binds we added back.
-        addLocalBindsToAnns =
-          undefined
-          -- addAnnWhere
-          --   . Map.fromList
-          --   . map (first (expandTemplateLoc . updateFile . expandGRHSLoc))
-          --   . Map.toList
-          where
-            -- addAnnWhere :: Anns -> Anns
-            addAnnWhere oldAnns = undefined
-            -- addAnnWhere oldAnns =
-            --   let oldAnns' = Map.toList oldAnns
-            --       po = foldAnnKey (const False) $ \r con ->
-            --         srcSpanToAnnSpan (RealSrcSpan' r) == srcSpanToAnnSpan (GHC.getLoc old)
-            --           && con == CN "Match"
-            --           && GHC.srcSpanFile r /= newFile
-            --       pn = foldAnnKey (const False) $ \r con ->
-            --         srcSpanToAnnSpan (RealSrcSpan' r) == srcSpanToAnnSpan finalLoc
-            --           && con == CN "Match"
-            --           && GHC.srcSpanFile r == newFile
-            --    in fromMaybe oldAnns $ do
-            --         oldAnn <- snd <$> find (po . fst) oldAnns'
-            --         annWhere <- find ((== G GHC.AnnWhere) . fst) (annsDP oldAnn)
-            --         let newSortKey = fmap (setAnnSpanFile newFile) <$> annSortKey oldAnn
-            --         newKey <- fst <$> find (pn . fst) oldAnns'
-            --         pure $
-            --           Map.adjust
-            --             (\ann -> ann {annsDP = annsDP ann ++ [annWhere], annSortKey = newSortKey})
-            --             newKey
-            --             oldAnns
-
-            -- Expand the SrcSpan of the "GRHS" entry in the new file to include the local binds
-            expandGRHSLoc = foldAnnKey id $ \r con ->
-              -- if con == CN "GRHS" && GHC.srcSpanFile r == newFile
-              --   then AnnKey (srcSpanToAnnSpan $ ensureLoc $ RealSrcSpan' r) con
-              --   else AnnKey (srcSpanToAnnSpan $ RealSrcSpan' r) con
-              undefined
-
-            -- If an Anns entry corresponds to the local binds, update its file to point to the new file.
-            updateFile = undefined
-            -- updateFile = \case
-            --   AnnKey loc con
-            --     | annSpanToSrcSpan loc `GHC.isSubspanOf` GHC.getLoc oldLocal ->
-            --       AnnKey (setAnnSpanFile newFile loc) con
-            --   other -> other
-
-            -- For each SrcSpan in the new file that is the entire newLoc, set it to finalLoc
-            expandTemplateLoc = undefined
-            -- expandTemplateLoc = \case
-            --   AnnKey loc con
-            --     | loc == srcSpanToAnnSpan newLoc -> AnnKey (srcSpanToAnnSpan finalLoc) con
-            --   other -> other
-
-    --     newAnns = addLocalBindsToAnns intAnns
-    -- put ((newAnns, newKeyMap), True)
     put True
     pure $ composeSrcSpan newWithLocalBinds
   | otherwise = pure old
@@ -699,30 +564,6 @@ replaceWorker m parser seed Replace {..} = do
       adjacent (GHC.srcSpanEnd -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) = loc1 == loc2
       adjacent _ _ = False
 
-      -- Add a space if needed, so that we avoid refactoring `y = f(x)` into `y = fx`.
-      -- ensureAppSpace :: Anns -> Anns
-      ensureAppSpace = undefined
-      -- ensureAppSpace = fromMaybe id $ do
-      --   (GHC.L _ (GHC.HsVar _ (GHC.L _ newName))) :: Expr <- cast newExpr
-      --   hd <- listToMaybe $ case newName of
-      --     Unqual n -> occNameString n
-      --     Qual moduleName _ -> GHC.moduleNameString moduleName
-      --     Orig modu _ -> GHC.moduleNameString (GHC.moduleName modu)
-      --     Exact name -> occNameString (nameOccName name)
-      --   guard $ isAlphaNum hd
-      --   let prev :: [Expr] =
-      --         listify
-      --           ( \case
-      --               (GHC.L loc (GHC.HsVar _ (GHC.L _ rdr))) ->
-      --                 maybe False isAlphaNum (lst rdr) && adjacent loc pos
-      --               _ -> False
-      --           )
-      --           m
-      --   guard . not . null $ prev
-      --   pure . flip Map.adjust (mkAnnKey newExpr) $ \ann ->
-      --     if annEntryDelta ann == DP (0, 0)
-      --       then ann {annEntryDelta = DP (0, 1)}
-      --       else ann
 
       -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
       -- ensureDoSpace :: Anns -> Anns
@@ -738,13 +579,10 @@ replaceWorker m parser seed Replace {..} = do
           e' = if isDo &&
                   manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
                   manchor_op (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
-            -- then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
             then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
             else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
-          -- e' = if manchor_op (GHC.ann l) == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
-          --         manchor_op (GHC.ann la) == Just (GHC.MovedAnchor (GHC.SameLine 0))
             e' = if False
             then (GHC.L l (GHC.HsApp x (setEntryDP (GHC.L la a) (GHC.SameLine 1)) (GHC.L lb b)))
             else if manchor_op (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
@@ -757,15 +595,11 @@ replaceWorker m parser seed Replace {..} = do
       tt:: GHC.LocatedA a -> StateT Bool IO (GHC.LocatedA a)
       tt = doGenReplacement m replacementPred newExpr
       transformation :: mod -> StateT Bool IO mod
-      -- transformation = transformBiM (doGenReplacement m (replacementPred . decomposeSrcSpan) newExpr)
-      -- transformation = transformBiM (doGenReplacement m replacementPred newExpr)
       transformation = transformBiM tt
   runStateT (transformation m) False >>= \case
-    -- (finalM, ((ensureDoSpace . ensureAppSpace -> finalAs, finalKeyMap), True)) ->
     (finalM, True) ->
       pure (ensureSpace finalM)
     -- Failed to find a replacment so don't make any changes
-    -- _ -> pure (as, m, keyMap)
     _ -> pure m
 replaceWorker m _ _ _ = pure m
 
@@ -834,19 +668,6 @@ doDeleteStmt = transformBi . filter
 doDeleteImport :: Data a => (Import -> Bool) -> a -> a
 doDeleteImport = transformBi . filter
 
-{-
--- Renaming
-
-doRename :: [(String, String)] -> Module -> Module
-doRename ss = everywhere (mkT rename)
-  where
-    rename :: GHC.OccName -> GHC.OccName
-    rename v = GHC.mkOccName n s'
-      where
-          (s, n) = (GHC.occNameString v, GHC.occNameSpace v)
-          s' = fromMaybe s (lookup s ss)
--}
-
 addExtensionsToFlags ::
   [Extension] ->
   [Extension] ->
@@ -886,15 +707,6 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
       case postParseTransform res of
         Left e -> pure (Left e)
         Right ast -> pure $ Right (makeDeltaAst ast)
-
--- old
--- postParseTransform
---   :: Either a (ApiAnns, [Comment], DynFlags, ParsedSource)
---   -> DeltaOptions -> Either a (Anns, ParsedSource)
--- new
--- postParseTransform
---   :: Either a ([GHC.LEpaComment], GHC.DynFlags, GHC.ParsedSource)
---   -> Either a (GHC.ParsedSource)
 
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).

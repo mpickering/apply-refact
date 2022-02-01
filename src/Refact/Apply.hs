@@ -8,7 +8,6 @@ where
 
 import Control.Monad (unless)
 import Data.List (intercalate)
--- import Language.Haskell.GHC.ExactPrint.Types (Anns)
 import Refact.Compat (Module)
 import Refact.Fixity (applyFixities)
 import Refact.Internal

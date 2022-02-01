@@ -25,7 +25,6 @@ module Refact.Compat (
   Errors,
   ErrorMessages,
   onError,
-  -- pprErrMsgBagWithLoc,
 
   -- * FastString / GHC.Data.FastString
   FastString,
@@ -107,8 +106,7 @@ import GHC.Data.StringBuffer (stringToStringBuffer)
 import GHC.Driver.Session hiding (initDynFlags)
 import GHC.Parser.Annotation
 import GHC.Parser.Header (getOptions)
--- import GHC.Types.Basic (Fixity (..), SourceText (..))
-import GHC.Types.Fixity  ( Fixity(..), FixityDirection(..) )
+import GHC.Types.Fixity  ( Fixity(..) )
 import GHC.Utils.Error hiding (mkErr)
 import GHC.Types.Name (nameOccName, occName, occNameString)
 import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
@@ -118,7 +116,6 @@ import GHC.Utils.Panic (pprPanic)
 import GHC.Utils.Outputable
   ( ppr,
     showSDocUnsafe,
-    -- pprPanic,
     text,
     vcat,
   )
@@ -165,11 +162,8 @@ import HsSyn hiding (Pat, Stmt)
 
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Data (Data)
--- import Data.Map.Strict (Map)
 import qualified GHC
--- import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers (Parser)
--- import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils
 import Refact.Types (Refactoring)
 
@@ -178,8 +172,6 @@ type MonadFail' = Monad
 #else
 type MonadFail' = MonadFail
 #endif
-
--- type AnnKeyMap = Map AnnKey [AnnKey]
 
 #if __GLASGOW_HASKELL__ >= 900
 type Module = Located HsModule
@@ -190,7 +182,6 @@ type Module = Located (HsModule GhcPs)
 #if __GLASGOW_HASKELL__ >= 810
 type Errors = ErrorMessages
 onError :: String -> Errors -> a
--- onError s = pprPanic s . vcat . pprErrMsgBagWithLoc
 onError s = pprPanic s . vcat . ppp
 ppp :: Errors -> [SDoc]
 ppp pst = concatMap unDecorated $ fmap errMsgDiagnostic $ bagToList pst
@@ -288,20 +279,15 @@ setAnnSpanFile =
 
 mkErr :: DynFlags -> SrcSpan -> String -> Errors
 #if __GLASGOW_HASKELL__ >= 810
--- mkErr df l s = unitBag (mkPlainErrMsg df l (text s))
 mkErr _df l s = unitBag (mkPlainMsgEnvelope l (text s))
 #else
 mkErr = const (,)
 #endif
 
--- type ParseResult a = Either GHC.ErrorMessages a
--- type Parser a = GHC.DynFlags -> FilePath -> String -> ParseResult a
-
 parseModuleName :: SrcSpan -> Parser (LocatedA GHC.ModuleName)
 parseModuleName ss _ _ s =
   let newMN =  GHC.L (GHC.noAnnSrcSpan ss) (GHC.mkModuleName s)
 #if __GLASGOW_HASKELL__ >= 900
-      -- newAnns = relativiseApiAnns newMN (GHC.ApiAnns mempty Nothing mempty mempty)
 #else
       newAnns = relativiseApiAnns newMN mempty
 #endif
@@ -314,7 +300,6 @@ type DoGenReplacement an ast a =
   (LocatedAn an ast -> Bool) ->
   LocatedAn an ast ->
   LocatedAn an ast ->
-  -- StateT ((Anns, AnnKeyMap), Bool) IO (Located ast)
   StateT Bool IO (LocatedAn an ast)
 #else
 type DoGenReplacement ast a =
@@ -329,13 +314,10 @@ type DoGenReplacement ast a =
 #if __GLASGOW_HASKELL__ <= 806 || __GLASGOW_HASKELL__ >= 900
 type ReplaceWorker a mod =
   (Data a, Data mod) =>
-  -- Anns ->
   mod ->
-  -- AnnKeyMap ->
   Parser (GHC.LocatedA a) ->
   Int ->
   Refactoring SrcSpan ->
-  -- IO (Anns, mod, AnnKeyMap)
   IO mod
 #else
 type ReplaceWorker a mod =
