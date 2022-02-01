@@ -344,9 +344,9 @@ runRefactoring m = \case
           then
             let
               dp = case getEntryDP old of
-                GHC.SameLine 0 -> GHC.DifferentLine 1 1
+                GHC.SameLine 0 -> GHC.DifferentLine 1 0
                 dp' -> dp'
-              (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 1)
+              (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 0)
               comment = GHC.L (GHC.Anchor r (GHC.MovedAnchor dp))
                                      (GHC.EpaComment (GHC.EpaLineComment newComment) r)
               l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])

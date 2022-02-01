@@ -34,7 +34,7 @@ library
   GHC-Options: -Wall
   build-depends: base >=4.16 && < 5
                , refact >= 0.2
-               , ghc-exactprint >= 1.4.1
+               , ghc-exactprint >= 1.5.0
                , ghc >= 9.2
                , ghc-boot-th
                , ghc-paths
