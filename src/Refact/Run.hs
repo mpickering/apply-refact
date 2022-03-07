@@ -7,7 +7,7 @@ import Data.List hiding (find)
 import Data.Maybe
 import Data.Version
 import Debug.Trace
-import Language.Haskell.GHC.ExactPrint.Utils
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 import Options.Applicative
 import Paths_apply_refact
 import Refact.Apply (parseExtensions)
@@ -85,11 +85,11 @@ runPipe Options {..} file = do
         let (enabledExts, disabledExts, invalidExts) = parseExtensions optionsLanguage
         unless (null invalidExts) . when (verb >= Normal) . putStrLn $
           "Invalid extensions: " ++ intercalate ", " invalidExts
-        (as, m) <-
-          either (onError "runPipe") (uncurry applyFixities)
+        m <-
+          either (onError "runPipe") applyFixities
             =<< parseModuleWithArgs (enabledExts, disabledExts) file
-        when optionsDebug (putStrLn (showAnnData as 0 m))
-        apply optionsPos optionsStep inp (Just file) verb as m
+        when optionsDebug (putStrLn (showAst m))
+        apply optionsPos optionsStep inp (Just file) verb m
 
   if optionsInplace && isJust optionsTarget
     then writeFileUTF8 file output

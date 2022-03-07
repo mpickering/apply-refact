@@ -8,7 +8,6 @@ where
 
 import Control.Monad (unless)
 import Data.List (intercalate)
-import Language.Haskell.GHC.ExactPrint.Types (Anns)
 import Refact.Compat (Module)
 import Refact.Fixity (applyFixities)
 import Refact.Internal
@@ -39,10 +38,10 @@ applyRefactorings ::
 applyRefactorings optionsPos inp file exts = do
   let (enabled, disabled, invalid) = parseExtensions exts
   unless (null invalid) . fail $ "Unsupported extensions: " ++ intercalate ", " invalid
-  (as, m) <-
-    either (onError "apply") (uncurry applyFixities)
+  m <-
+    either (onError "apply") applyFixities
       =<< parseModuleWithArgs (enabled, disabled) file
-  apply optionsPos False ((mempty,) <$> inp) (Just file) Silent as m
+  apply optionsPos False ((mempty,) <$> inp) (Just file) Silent m
 
 -- | Like 'applyRefactorings', but takes a parsed module rather than a file path to parse.
 applyRefactorings' ::
@@ -50,7 +49,7 @@ applyRefactorings' ::
   [[Refactoring SrcSpan]] ->
   -- | ghc-exactprint AST annotations. This can be obtained from
   -- 'Language.Haskell.GHC.ExactPrint.Parsers.postParseTransform'.
-  Anns ->
+  -- Anns ->
   -- | Parsed module
   Module ->
   IO String
