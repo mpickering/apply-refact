@@ -148,7 +148,7 @@ apply mpos step inp mbfile verb m0 = do
       then fromMaybe m0 <$> runMaybeT (refactoringLoop m0 allRefacts)
       else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
 
-  liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
+  -- liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
   pure . snd. runIdentity $ exactPrintWithOptions refactOptions m
 
 
