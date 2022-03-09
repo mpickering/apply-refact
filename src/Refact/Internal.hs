@@ -693,7 +693,6 @@ parseModuleWithArgs ::
   FilePath ->
   IO (Either Errors GHC.ParsedSource)
 parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
-  let libdir = GHC.Paths.libdir
   initFlags <- initDynFlags fp
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
   case eflags of
@@ -701,7 +700,7 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
     Left err -> pure . Left $ mkErr initFlags GHC.noSrcSpan err
     Right flags -> do
       liftIO $ writeIORef' dynFlagsRef (Just flags)
-      res <- liftIO $ parseModuleEpAnnsWithCpp libdir defaultCppOptions fp
+      res <- parseModuleEpAnnsWithCppInternal defaultCppOptions flags fp
 
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
