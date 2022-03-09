@@ -9,12 +9,12 @@ on:
       - synchronize
 jobs:
   hlint:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
       - uses: rwe/actions-hlint-setup@v1
         with:
-          version: '3.2.7'
+          version: '3.3.6'
       - uses: rwe/actions-hlint-run@v2
         with:
           path: '["src/"]'
