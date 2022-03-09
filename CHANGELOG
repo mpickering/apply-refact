@@ -1,3 +1,6 @@
+v0.10.0.0
+  * support GHC 9.2; drop support for GHC <= 9.0 (@alanz)
+
 v0.9.3.0
 
   * #113, Fix Annotation when context parens are removed
