@@ -27,8 +27,8 @@ import Control.Monad.Trans.State.Strict
 import Data.Data
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
-import Data.Generics (everywhereM, extM, listify, mkM, mkQ, mkT, something, everywhere)
-import Data.Generics.Uniplate.Data (transformBi, transformBiM )
+import Data.Generics (everywhere, everywhereM, extM, listify, mkM, mkQ, mkT, something)
+import Data.Generics.Uniplate.Data (transformBi, transformBiM)
 import Data.IORef.Extra
 import Data.List.Extra
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
@@ -37,9 +37,9 @@ import qualified Data.Set as Set
 import Data.Tuple.Extra
 import Debug.Trace
 import qualified GHC
-import qualified GHC.Paths
 import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
+import qualified GHC.Paths
 import Language.Haskell.GHC.ExactPrint
 import Language.Haskell.GHC.ExactPrint.ExactPrint
 import Language.Haskell.GHC.ExactPrint.Parsers
@@ -82,8 +82,7 @@ import Refact.Compat
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils
-  (
-    Decl,
+  ( Decl,
     Expr,
     Import,
     M,
@@ -149,8 +148,7 @@ apply mpos step inp mbfile verb m0 = do
       else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
 
   -- liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
-  pure . snd. runIdentity $ exactPrintWithOptions refactOptions m
-
+  pure . snd . runIdentity $ exactPrintWithOptions refactOptions m
 
 spans :: R.SrcSpan -> (Int, Int) -> Bool
 spans R.SrcSpan {..} loc = (startLine, startCol) <= loc && loc <= (endLine, endCol)
@@ -220,12 +218,11 @@ refactoringLoop ::
   Module ->
   [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)] ->
   MaybeT IO Module
-refactoringLoop  m [] = pure m
+refactoringLoop m [] = pure m
 refactoringLoop m (((_, []), _) : rs) = refactoringLoop m rs
 refactoringLoop m0 hints@(((hintDesc, rs), ss) : rss) = do
   res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent m0 rs
-  let
-      yAction :: MaybeT IO Module
+  let yAction :: MaybeT IO Module
       yAction = case res of
         Just m -> do
           exactPrint m `seq` pure ()
@@ -295,20 +292,21 @@ runRefactoring m = \case
   InsertComment {..} -> pure (addComment m)
     where
       addComment = transformBi go
-      r = srcSpanToAnnSpan  pos
-      go :: (GHC.LHsDecl GHC.GhcPs) -> (GHC.LHsDecl GHC.GhcPs)
+      r = srcSpanToAnnSpan pos
+      go :: GHC.LHsDecl GHC.GhcPs -> GHC.LHsDecl GHC.GhcPs
       go old@(GHC.L l d) =
         if ss2pos (srcSpanToAnnSpan $ GHC.locA l) == ss2pos r
           then
-            let
-              dp = case getEntryDP old of
-                GHC.SameLine 0 -> GHC.DifferentLine 1 0
-                dp' -> dp'
-              (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 0)
-              comment = GHC.L (GHC.Anchor r (GHC.MovedAnchor dp))
-                                     (GHC.EpaComment (GHC.EpaLineComment newComment) r)
-              l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])
-            in (GHC.L l'' d')
+            let dp = case getEntryDP old of
+                  GHC.SameLine 0 -> GHC.DifferentLine 1 0
+                  dp' -> dp'
+                (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 0)
+                comment =
+                  GHC.L
+                    (GHC.Anchor r (GHC.MovedAnchor dp))
+                    (GHC.EpaComment (GHC.EpaLineComment newComment) r)
+                l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])
+             in GHC.L l'' d'
           else old
   RemoveAsKeyword {..} -> pure (removeAsKeyword m)
     where
@@ -318,25 +316,24 @@ runRefactoring m = \case
         | srcSpanToAnnSpan (GHC.locA l) == srcSpanToAnnSpan pos = GHC.L l (i {GHC.ideclAs = Nothing})
         | otherwise = imp
 
-
 modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
 modifyComment pos newComment = transformBi go
   where
-      newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
-      newTok  (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
-      newTok  (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
-      newTok  (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
-      newTok  (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
-      newTok  (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
-      newTok  (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
-      newTok  (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
-      newTok  (GHC.EpaEofComment) = GHC.EpaEofComment
+    newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
+    newTok (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
+    newTok (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
+    newTok (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
+    newTok (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
+    newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+    newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+    newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+    newTok GHC.EpaEofComment = GHC.EpaEofComment
 
-      go :: GHC.LEpaComment -> GHC.LEpaComment
-      go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
-        if ss2pos l == ss2pos (GHC.realSrcSpan pos)
-          then (GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r))
-          else old
+    go :: GHC.LEpaComment -> GHC.LEpaComment
+    go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
+      if ss2pos l == ss2pos (GHC.realSrcSpan pos)
+        then GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r)
+        else old
 
 droppedComments :: [Refactoring GHC.SrcSpan] -> Module -> Module -> Bool
 droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comments)
@@ -346,7 +343,7 @@ droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comm
     runModifyComment m' _ = m'
 
     all_comments :: forall r. (Data r, Typeable r) => r -> [GHC.EpaComment]
-    all_comments = listify (False `mkQ` isComment )
+    all_comments = listify (False `mkQ` isComment)
     isComment :: GHC.EpaComment -> Bool
     isComment _ = True
     orig_comments = all_comments mcs
@@ -427,7 +424,7 @@ identSub _ _ e = pure e
 -- g is usually modifyAnnKey
 -- f is usually a function which checks the locations are equal
 resolveRdrName' ::
-  (a -> (GHC.LocatedAn an b) -> M a) -> -- How to combine the value to insert and the replaced value
+  (a -> GHC.LocatedAn an b -> M a) -> -- How to combine the value to insert and the replaced value
   (AnnSpan -> M (GHC.LocatedAn an b)) -> -- How to find the new value, when given the location it is in
   a -> -- The old thing which we are going to possibly replace
   [(String, GHC.SrcSpan)] -> -- Substs
@@ -451,14 +448,13 @@ resolveRdrName ::
   M (GHC.LocatedAn an old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
-
 -- Substitute the template into the original AST.
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
 doGenReplacement m p new old
   | p old = do
     let n = decomposeSrcSpan new
         o = decomposeSrcSpan old
-    let (new',_,_) = runTransform $ transferEntryDP old new
+    let (new', _, _) = runTransform $ transferEntryDP old new
     put True
     pure new'
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
@@ -491,7 +487,7 @@ doGenReplacement m p new old
             newMatch
             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
             newGRHSs
-        (newWithLocalBinds,_,_) = runTransform $ transferEntryDP' old newWithLocalBinds0
+        (newWithLocalBinds, _, _) = runTransform $ transferEntryDP' old newWithLocalBinds0
 
     put True
     pure $ composeSrcSpan newWithLocalBinds
@@ -564,7 +560,6 @@ replaceWorker m parser seed Replace {..} = do
       adjacent (GHC.srcSpanEnd -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) = loc1 == loc2
       adjacent _ _ = False
 
-
       -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
       -- ensureDoSpace :: Anns -> Anns
       ensureSpace :: forall t. (Data t) => t -> t
@@ -576,23 +571,23 @@ replaceWorker m parser seed Replace {..} = do
           isDo = case v of
             GHC.ListComp -> False
             _ -> True
-          e' = if isDo &&
-                  manchor_op an == Just (GHC.MovedAnchor (GHC.SameLine 0)) &&
-                  manchor_op (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
-            then (GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1))))
-            else e
+          e' =
+            if isDo
+              && manchorOp an == Just (GHC.MovedAnchor (GHC.SameLine 0))
+              && manchorOp (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+              then GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1)))
+              else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
-            e' = if False
-            then (GHC.L l (GHC.HsApp x (setEntryDP (GHC.L la a) (GHC.SameLine 1)) (GHC.L lb b)))
-            else if manchor_op (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
-            then(GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)) ))
-            else e
+          e' =
+            if manchorOp (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+              then GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)))
+              else e
       ensureExprSpace e = e
 
       replacementPred = (== replExprLocation) . getAnnSpanA
 
-      tt:: GHC.LocatedA a -> StateT Bool IO (GHC.LocatedA a)
+      tt :: GHC.LocatedA a -> StateT Bool IO (GHC.LocatedA a)
       tt = doGenReplacement m replacementPred newExpr
       transformation :: mod -> StateT Bool IO mod
       transformation = transformBiM tt
@@ -603,9 +598,9 @@ replaceWorker m parser seed Replace {..} = do
     _ -> pure m
 replaceWorker m _ _ _ = pure m
 
-manchor_op :: GHC.EpAnn ann -> Maybe GHC.AnchorOperation
-manchor_op GHC.EpAnnNotUsed = Nothing
-manchor_op (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
+manchorOp :: GHC.EpAnn ann -> Maybe GHC.AnchorOperation
+manchorOp GHC.EpAnnNotUsed = Nothing
+manchorOp (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
 
 data NotFound = NotFound
   { nfExpected :: String,
@@ -624,8 +619,12 @@ renderNotFound NotFound {..} =
     ++ showSDocUnsafe (ppr nfLoc)
 
 -- Find a given type with a given SrcSpan
-findInModule :: forall an a modu. (Typeable an, Data a, Data modu)
-  => modu -> AnnSpan -> Either NotFound (GHC.LocatedAn an a)
+findInModule ::
+  forall an a modu.
+  (Typeable an, Data a, Data modu) =>
+  modu ->
+  AnnSpan ->
+  Either NotFound (GHC.LocatedAn an a)
 findInModule m ss = case doTrans m of
   Just a -> Right a
   Nothing ->
@@ -706,7 +705,6 @@ parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
       case postParseTransform res of
         Left e -> pure (Left e)
         Right ast -> pure $ Right (makeDeltaAst ast)
-
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@

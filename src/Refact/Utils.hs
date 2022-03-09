@@ -1,6 +1,5 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Refact.Utils
   ( -- * Synonyms
@@ -35,14 +34,14 @@ where
 
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Data
-  ( Data (),)
+  ( Data (),
+  )
+import Data.Generics (everywhere, mkT)
 import Data.Typeable
-import Data.Generics ( mkT, everywhere)
 import qualified GHC
 import Language.Haskell.GHC.ExactPrint
 import Refact.Compat
-  (
-    AnnSpan,
+  ( AnnSpan,
     FastString,
     FunBind,
     Module,
@@ -75,7 +74,6 @@ type Stmt = GHC.ExprLStmt GHC.GhcPs
 
 type Import = GHC.LImportDecl GHC.GhcPs
 
-
 getAnnSpanA :: forall an a. GHC.LocatedAn an a -> AnnSpan
 getAnnSpanA = srcSpanToAnnSpan . GHC.getLocA
 
@@ -104,7 +102,7 @@ modifyAnnKey _m e1 e2 = do
   -- liftIO $ putStrLn $ "modifyAnnKey:e2" ++ showAst e2
   let e2_0 = handleBackquotes e1 e2
   -- liftIO $ putStrLn $ "modifyAnnKey:e2_0" ++ showAst e2_0
-  let (e2',_,_) = runTransform $ transferEntryDP e1 e2_0
+  let (e2', _, _) = runTransform $ transferEntryDP e1 e2_0
   -- liftIO $ putStrLn $ "modifyAnnKey:e2'" ++ showAst e2'
   return e2'
 
@@ -118,36 +116,36 @@ modifyAnnKey _m e1 e2 = do
 --        tests/examples/Uncurry.hs for an example.
 --        N.B.: this is not always correct, since it is possible that the refactoring output
 --        should keep the backquotes, but currently no test case fails because of it.
-handleBackquotes :: forall t old new.
-                (Data t, Data old, Data new, Monoid t, Typeable t)
-                => GHC.LocatedAn t old
-                -> GHC.LocatedAn t new
-                -> GHC.LocatedAn t new
-handleBackquotes old new@(GHC.L loc _)
-  = everywhere (mkT update) new
+handleBackquotes ::
+  forall t old new.
+  (Data t, Data old, Data new, Monoid t, Typeable t) =>
+  GHC.LocatedAn t old ->
+  GHC.LocatedAn t new ->
+  GHC.LocatedAn t new
+handleBackquotes old new@(GHC.L loc _) =
+  everywhere (mkT update) new
   where
     update :: GHC.LHsExpr GHC.GhcPs -> GHC.LHsExpr GHC.GhcPs
-    update (GHC.L l (GHC.HsVar x (GHC.L ln n))) = (GHC.L l (GHC.HsVar x (GHC.L ln' n)))
+    update (GHC.L l (GHC.HsVar x (GHC.L ln n))) = GHC.L l (GHC.HsVar x (GHC.L ln' n))
       where
         ln' =
-          if GHC.locA l == GHC.locA loc then
-            case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
+          if GHC.locA l == GHC.locA loc
+            then case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
               Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.SrcSpanAnn (GHC.EpAnn _ ann _) _) _)))
                 -- scenario 1
-                | GHC.NameAnn (GHC.NameBackquotes) _ _ _ _ <- ann ->
-                    case ln of
-                      (GHC.SrcSpanAnn (GHC.EpAnn a _ cs) ll) -> (GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll)
-                      (GHC.SrcSpanAnn GHC.EpAnnNotUsed ll) ->
-                        (GHC.SrcSpanAnn (GHC.EpAnn (GHC.spanAsAnchor ll) ann GHC.emptyComments ) ll)
+                | GHC.NameAnn GHC.NameBackquotes _ _ _ _ <- ann ->
+                  case ln of
+                    (GHC.SrcSpanAnn (GHC.EpAnn a _ cs) ll) -> GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
+                    (GHC.SrcSpanAnn GHC.EpAnnNotUsed ll) ->
+                      GHC.SrcSpanAnn (GHC.EpAnn (GHC.spanAsAnchor ll) ann GHC.emptyComments) ll
                 -- scenario 2
                 | GHC.SrcSpanAnn (GHC.EpAnn a ann' cs) ll <- ln,
-                  GHC.NameAnn (GHC.NameBackquotes) _ _ _ _ <- ann' ->
-                    GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
+                  GHC.NameAnn GHC.NameBackquotes _ _ _ _ <- ann' ->
+                  GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
               Just _ -> ln
               Nothing -> ln
             else ln
     update x = x
-
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> GHC.SrcSpan
