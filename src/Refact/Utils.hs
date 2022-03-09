@@ -102,22 +102,28 @@ modifyAnnKey ::
 modifyAnnKey _m e1 e2 = do
   -- liftIO $ putStrLn $ "modifyAnnKey:e1" ++ showAst e1
   -- liftIO $ putStrLn $ "modifyAnnKey:e2" ++ showAst e2
-  let e2_0 = recoverBackquotes e1 e2
+  let e2_0 = handleBackquotes e1 e2
   -- liftIO $ putStrLn $ "modifyAnnKey:e2_0" ++ showAst e2_0
   let (e2',_,_) = runTransform $ transferEntryDP e1 e2_0
   -- liftIO $ putStrLn $ "modifyAnnKey:e2'" ++ showAst e2'
   return e2'
 
--- | When the template contains a backquoted substitution variable, but the substitute
--- is not backquoted, we must add the corresponding 'GHC.AnnBackQuote's.
+-- | This function handles backquotes in two scenarios:
 --
--- See tests/examples/Backquotes.hs for an example.
-recoverBackquotes :: forall t old new.
+--     1. When the template contains a backquoted substitution variable, but the substitute
+--        is not backquoted, we must add the corresponding 'GHC.NameBackquotes'. See
+--        tests/examples/Backquotes.hs for an example.
+--     2. When the template contains a substitution variable without backquote, and the
+--        substitute is backquoted, we remove the 'GHC.NameBackquotes' annotation. See
+--        tests/examples/Uncurry.hs for an example.
+--        N.B.: this is not always correct, since it is possible that the refactoring output
+--        should keep the backquotes, but currently no test case fails because of it.
+handleBackquotes :: forall t old new.
                 (Data t, Data old, Data new, Monoid t, Typeable t)
                 => GHC.LocatedAn t old
                 -> GHC.LocatedAn t new
                 -> GHC.LocatedAn t new
-recoverBackquotes old new@(GHC.L loc _)
+handleBackquotes old new@(GHC.L loc _)
   = everywhere (mkT update) new
   where
     update :: GHC.LHsExpr GHC.GhcPs -> GHC.LHsExpr GHC.GhcPs
@@ -126,11 +132,17 @@ recoverBackquotes old new@(GHC.L loc _)
         ln' =
           if GHC.locA l == GHC.locA loc then
             case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
-              Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.SrcSpanAnn (GHC.EpAnn _ ann _) _) _))) ->
+              Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.SrcSpanAnn (GHC.EpAnn _ ann _) _) _)))
+                -- scenario 1
+                | GHC.NameAnn (GHC.NameBackquotes) _ _ _ _ <- ann ->
                     case ln of
                       (GHC.SrcSpanAnn (GHC.EpAnn a _ cs) ll) -> (GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll)
                       (GHC.SrcSpanAnn GHC.EpAnnNotUsed ll) ->
                         (GHC.SrcSpanAnn (GHC.EpAnn (GHC.spanAsAnchor ll) ann GHC.emptyComments ) ll)
+                -- scenario 2
+                | GHC.SrcSpanAnn (GHC.EpAnn a ann' cs) ll <- ln,
+                  GHC.NameAnn (GHC.NameBackquotes) _ _ _ _ <- ann' ->
+                    GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
               Just _ -> ln
               Nothing -> ln
             else ln

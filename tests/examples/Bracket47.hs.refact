@@ -1,0 +1,1 @@
+[("tests/examples/Bracket47.hs:1:7-25: Warning: Redundant curry\nFound:\n  curry (uncurry (+))\nPerhaps:\n  (+)\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 1, startCol = 7, endLine = 1, endCol = 26}, subts = [("f",SrcSpan {startLine = 1, startCol = 22, endLine = 1, endCol = 25})], orig = "f"}])]
