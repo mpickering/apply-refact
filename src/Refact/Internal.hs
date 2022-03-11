@@ -41,10 +41,24 @@ import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
 import qualified GHC.Paths
 import Language.Haskell.GHC.ExactPrint
+  ( ExactPrint,
+    exactPrint,
+    getEntryDP,
+    makeDeltaAst,
+    runTransform,
+    setEntryDP,
+    transferEntryDP,
+    transferEntryDP',
+  )
 import Language.Haskell.GHC.ExactPrint.ExactPrint
+  ( EPOptions,
+    epRigidity,
+    exactPrintWithOptions,
+    stringOptions,
+  )
 import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Types
-import Language.Haskell.GHC.ExactPrint.Utils
+import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
     DoGenReplacement,
@@ -56,7 +70,6 @@ import Refact.Compat
     -- combineSrcSpans,
     combineSrcSpansA,
     composeSrcSpan,
-    decomposeSrcSpan,
     getOptions,
     gopt_set,
     handleGhcException,
@@ -68,7 +81,6 @@ import Refact.Compat
     parseDynamicFilePragma,
     parseModuleName,
     ppr,
-    rdrNameOcc,
     setSrcSpanFile,
     showSDocUnsafe,
     srcSpanToAnnSpan,
@@ -76,7 +88,6 @@ import Refact.Compat
     xFlags,
     xopt_set,
     xopt_unset,
-    pattern RealSrcLoc',
     pattern RealSrcSpan',
   )
 import Refact.Types hiding (SrcSpan)
@@ -450,10 +461,8 @@ resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
 -- Substitute the template into the original AST.
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
-doGenReplacement m p new old
+doGenReplacement _ p new old
   | p old = do
-    let n = decomposeSrcSpan new
-        o = decomposeSrcSpan old
     let (new', _, _) = runTransform $ transferEntryDP old new
     put True
     pure new'
@@ -465,8 +474,6 @@ doGenReplacement m p new old
     Just (oldNoLocal, oldLocal) <- stripLocalBind old,
     (RealSrcSpan' newLocReal) <- GHC.getLocA new,
     p (composeSrcSpan oldNoLocal) = do
-    let n = decomposeSrcSpan new
-        o = decomposeSrcSpan old
     let newFile = GHC.srcSpanFile newLocReal
         newLocal :: GHC.HsLocalBinds GHC.GhcPs
         newLocal = transformBi (setSrcSpanFile newFile) oldLocal
@@ -556,13 +563,9 @@ replaceWorker m parser seed Replace {..} = do
       (substTransform m subts (makeDeltaAst template))
       -- (mergeAnns as relat, keyMap)
       ()
-  let lst = listToMaybe . reverse . occNameString . rdrNameOcc
-      adjacent (GHC.srcSpanEnd -> RealSrcLoc' loc1) (GHC.srcSpanStart -> RealSrcLoc' loc2) = loc1 == loc2
-      adjacent _ _ = False
-
-      -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
-      -- ensureDoSpace :: Anns -> Anns
-      ensureSpace :: forall t. (Data t) => t -> t
+  -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
+  -- ensureDoSpace :: Anns -> Anns
+  let ensureSpace :: forall t. (Data t) => t -> t
       ensureSpace = everywhere (mkT ensureExprSpace)
 
       ensureExprSpace :: Expr -> Expr
@@ -640,13 +643,18 @@ findInModule m ss = case doTrans m of
               ]
      in Left $ NotFound expected actual ss
   where
-    doTrans :: forall an b. (Typeable an, Data b) => modu -> Maybe (GHC.LocatedAn an b)
+    doTrans :: forall an' b. (Typeable an', Data b) => modu -> Maybe (GHC.LocatedAn an' b)
     doTrans = something (mkQ Nothing (findLargestExpression ss))
 
-    showType :: forall an b. Typeable b => Maybe (GHC.LocatedAn an b) -> Maybe String
+    showType :: forall an' b. Typeable b => Maybe (GHC.LocatedAn an' b) -> Maybe String
     showType = fmap $ \_ -> show (typeRep (Proxy @b))
 
-findLargestExpression :: forall an a. Data a => AnnSpan -> GHC.LocatedAn an a -> Maybe (GHC.LocatedAn an a)
+findLargestExpression ::
+  forall an a.
+  Data a =>
+  AnnSpan ->
+  GHC.LocatedAn an a ->
+  Maybe (GHC.LocatedAn an a)
 findLargestExpression as e@(getAnnSpanA -> l) = if l == as then Just e else Nothing
 
 findOrError ::
