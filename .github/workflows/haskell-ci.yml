@@ -33,9 +33,9 @@ jobs:
     strategy:
       matrix:
         include:
-          - compiler: ghc-9.2.1
+          - compiler: ghc-9.4.2
             compilerKind: ghc
-            compilerVersion: 9.2.1
+            compilerVersion: 9.4.2
             setup-method: ghcup
             allow-failure: false
       fail-fast: false
@@ -45,7 +45,7 @@ jobs:
           apt-get update
           apt-get install -y --no-install-recommends gnupg ca-certificates dirmngr curl git software-properties-common libtinfo5
           mkdir -p "$HOME/.ghcup/bin"
-          curl -sL https://downloads.haskell.org/ghcup/0.1.17.3/x86_64-linux-ghcup-0.1.17.3 > "$HOME/.ghcup/bin/ghcup"
+          curl -sL https://downloads.haskell.org/ghcup/0.1.18.0/x86_64-linux-ghcup-0.1.18.0 > "$HOME/.ghcup/bin/ghcup"
           chmod a+x "$HOME/.ghcup/bin/ghcup"
           "$HOME/.ghcup/bin/ghcup" install ghc "$HCVER"
           "$HOME/.ghcup/bin/ghcup" install cabal 3.6.2.0

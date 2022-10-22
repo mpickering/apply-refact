@@ -33,7 +33,6 @@ import Data.IORef.Extra
 import Data.List.Extra
 import Data.Maybe (catMaybes, fromMaybe, listToMaybe, mapMaybe)
 import Data.Ord (comparing)
-import qualified Data.Set as Set
 import Data.Tuple.Extra
 import Debug.Trace
 import qualified GHC
@@ -89,6 +88,8 @@ import Refact.Compat
     xopt_set,
     xopt_unset,
     pattern RealSrcSpan',
+    mkGeneratedHsDocString,
+    initParserOpts
   )
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
@@ -331,10 +332,7 @@ modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
 modifyComment pos newComment = transformBi go
   where
     newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
-    newTok (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
-    newTok (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
-    newTok (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
-    newTok (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
+    newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
     newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
     newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
     newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
@@ -347,7 +345,7 @@ modifyComment pos newComment = transformBi go
         else old
 
 droppedComments :: [Refactoring GHC.SrcSpan] -> Module -> Module -> Bool
-droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comments)
+droppedComments rs orig_m m = not (all (`elem` current_comments) orig_comments)
   where
     mcs = foldl' runModifyComment orig_m rs
     runModifyComment m' (ModifyComment pos newComment) = modifyComment pos newComment m'
@@ -358,7 +356,7 @@ droppedComments rs orig_m m = not (all (`Set.member` current_comments) orig_comm
     isComment :: GHC.EpaComment -> Bool
     isComment _ = True
     orig_comments = all_comments mcs
-    current_comments = Set.fromList $ all_comments m
+    current_comments = all_comments m
 
 parseBind :: Parser (GHC.LHsBind GHC.GhcPs)
 parseBind dyn fname s =
@@ -683,7 +681,7 @@ addExtensionsToFlags ::
   IO (Either String GHC.DynFlags)
 addExtensionsToFlags es ds fp flags = catchErrors $ do
   (stringToStringBuffer -> buf) <- readFileUTF8' fp
-  let opts = getOptions flags buf fp
+  let (_, opts) = getOptions (initParserOpts flags) buf fp
       withExts =
         flip (foldl' xopt_unset) ds
           . flip (foldl' xopt_set) es
