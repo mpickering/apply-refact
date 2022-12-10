@@ -97,6 +97,9 @@ module Refact.Compat (
   setSrcSpanFile,
   srcSpanToAnnSpan,
   AnnSpan,
+
+  -- * GHC 9.4 stuff
+  initParserOpts,
 ) where
 
 #if __GLASGOW_HASKELL__ >= 900
@@ -107,7 +110,7 @@ import GHC.Driver.Session hiding (initDynFlags)
 import GHC.Parser.Annotation
 import GHC.Parser.Header (getOptions)
 import GHC.Types.Fixity  ( Fixity(..) )
-import GHC.Utils.Error hiding (mkErr)
+import GHC.Utils.Error
 import GHC.Types.Name (nameOccName, occName, occNameString)
 import GHC.Types.Name.Reader (RdrName (..), rdrNameOcc)
 import GHC.Types.SrcLoc hiding (spans)
@@ -160,6 +163,11 @@ import GHC.Hs hiding (Pat, Stmt)
 import HsSyn hiding (Pat, Stmt)
 #endif
 
+import GHC.Driver.Errors.Types (ErrorMessages, ghcUnknownMessage)
+import GHC.Types.Error(getMessages)
+import qualified GHC.Data.Strict as Strict
+import GHC.Driver.Config.Parser
+
 import Control.Monad.Trans.State.Strict (StateT)
 import Data.Data (Data)
 import qualified GHC
@@ -184,7 +192,7 @@ type Errors = ErrorMessages
 onError :: String -> Errors -> a
 onError s = pprPanic s . vcat . ppp
 ppp :: Errors -> [SDoc]
-ppp pst = concatMap unDecorated $ fmap errMsgDiagnostic $ bagToList pst
+ppp pst = concatMap unDecorated $ fmap (diagnosticMessage . errMsgDiagnostic) $ bagToList $ getMessages pst
 #else
 type Errors = (SrcSpan, String)
 onError :: String -> Errors -> a
@@ -200,7 +208,7 @@ type FunBind = HsMatchContext RdrName
 pattern RealSrcLoc' :: RealSrcLoc -> SrcLoc
 #if __GLASGOW_HASKELL__ >= 900
 pattern RealSrcLoc' r <- RealSrcLoc r _ where
-  RealSrcLoc' r = RealSrcLoc r Nothing
+  RealSrcLoc' r = RealSrcLoc r Strict.Nothing
 #else
 pattern RealSrcLoc' r <- RealSrcLoc r where
   RealSrcLoc' r = RealSrcLoc r
@@ -210,7 +218,7 @@ pattern RealSrcLoc' r <- RealSrcLoc r where
 pattern RealSrcSpan' :: RealSrcSpan -> SrcSpan
 #if __GLASGOW_HASKELL__ >= 900
 pattern RealSrcSpan' r <- RealSrcSpan r _ where
-  RealSrcSpan' r = RealSrcSpan r Nothing
+  RealSrcSpan' r = RealSrcSpan r Strict.Nothing
 #else
 pattern RealSrcSpan' r <- RealSrcSpan r where
   RealSrcSpan' r = RealSrcSpan r
@@ -247,7 +255,7 @@ srcSpanToAnnSpan =
 annSpanToSrcSpan :: AnnSpan -> SrcSpan
 annSpanToSrcSpan =
 #if __GLASGOW_HASKELL__ >= 900
-  flip RealSrcSpan Nothing
+  flip RealSrcSpan Strict.Nothing
 #else
   id
 #endif
@@ -279,7 +287,7 @@ setAnnSpanFile =
 
 mkErr :: DynFlags -> SrcSpan -> String -> Errors
 #if __GLASGOW_HASKELL__ >= 810
-mkErr _df l s = unitBag (mkPlainMsgEnvelope l (text s))
+mkErr _df l s = mkMessages $ unitBag (mkPlainErrorMsgEnvelope l (ghcUnknownMessage $ mkDecoratedError [] [text s]))
 #else
 mkErr = const (,)
 #endif

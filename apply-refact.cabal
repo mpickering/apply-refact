@@ -1,7 +1,7 @@
 cabal-version:       2.4
 
 name:                apply-refact
-version:             0.10.0.0
+version:             0.11.0.0
 synopsis:            Perform refactorings specified by the refact library.
 description:         Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
 license:             BSD-3-Clause
@@ -18,7 +18,7 @@ extra-source-files:  CHANGELOG
                    , tests/examples/*.hs
                    , tests/examples/*.hs.refact
                    , tests/examples/*.hs.expected
-tested-with:         GHC == 9.2.1
+tested-with:         GHC == 9.4.2
 
 
 source-repository head
@@ -34,8 +34,8 @@ library
   GHC-Options: -Wall
   build-depends: base >=4.16 && < 5
                , refact >= 0.2
-               , ghc-exactprint >= 1.5.0
-               , ghc >= 9.2
+               , ghc-exactprint >= 1.6.0
+               , ghc >= 9.4
                , ghc-boot-th
                , ghc-paths
                , containers >= 0.6.0.1 && < 0.7
