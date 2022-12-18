@@ -156,7 +156,7 @@ ppp :: Errors -> [SDoc]
 #if MIN_VERSION_ghc(9,4,0)
 ppp pst = concatMap unDecorated $ fmap (diagnosticMessage . errMsgDiagnostic) $ bagToList $ getMessages pst
 #else
-ppp pst = concatMap unDecorated $ fmap errMsgDiagnostic $ bagToList pst
+ppp pst = concatMap unDecorated (errMsgDiagnostic <$> bagToList pst)
 #endif
 
 type FunBind = HsMatchContext GhcPs
