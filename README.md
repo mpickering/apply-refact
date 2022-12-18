@@ -2,7 +2,7 @@
 [`refact`](https://hackage.haskell.org/package/refact) package. It is currently
 integrated into [HLint](https://github.com/ndmitchell/hlint) to enable the automatic application of suggestions.
 
-apply-refact 0.11.x supports GHC 9.4, and 0.9.x supports GHC 8.6 through 9.0, 0.10.x supports GHC 9.2.
+apply-refact 0.11.x supports GHC 9.4 and 9.2, 0.10.x supports GHC 9.2 and 0.9.x supports GHC 8.6 through 9.0.
 
 # Install
 
