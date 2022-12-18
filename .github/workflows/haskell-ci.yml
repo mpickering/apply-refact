@@ -38,7 +38,6 @@ jobs:
             compilerVersion: 9.4.2
             setup-method: ghcup
             allow-failure: false
-        include:
           - compiler: ghc-9.2.5
             compilerKind: ghc
             compilerVersion: 9.2.5
