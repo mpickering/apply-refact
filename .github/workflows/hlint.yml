@@ -12,10 +12,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
-      - uses: rwe/actions-hlint-setup@v1
+      - uses: rwe/actions-hlint-setup@v1.0.3
         with:
           version: '3.5'
-      - uses: rwe/actions-hlint-run@v2
+      - uses: rwe/actions-hlint-run@v2.0.1
         with:
           path: '["src/"]'
           fail-on: status
