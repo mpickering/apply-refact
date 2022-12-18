@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -88,8 +89,10 @@ import Refact.Compat
     xopt_set,
     xopt_unset,
     pattern RealSrcSpan',
+#if MIN_VERSION_ghc(9,4,0)
     mkGeneratedHsDocString,
     initParserOpts
+#endif
   )
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
@@ -331,12 +334,23 @@ runRefactoring m = \case
 modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
 modifyComment pos newComment = transformBi go
   where
+#if MIN_VERSION_ghc(9,4,0)
     newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
     newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
     newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
     newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
     newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
     newTok GHC.EpaEofComment = GHC.EpaEofComment
+#else
+    newTok (GHC.EpaDocCommentNext _) = GHC.EpaDocCommentNext newComment
+    newTok (GHC.EpaDocCommentPrev _) = GHC.EpaDocCommentPrev newComment
+    newTok (GHC.EpaDocCommentNamed _) = GHC.EpaDocCommentNamed newComment
+    newTok (GHC.EpaDocSection i _) = GHC.EpaDocSection i newComment
+    newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+    newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+    newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+    newTok GHC.EpaEofComment = GHC.EpaEofComment
+#endif
 
     go :: GHC.LEpaComment -> GHC.LEpaComment
     go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
@@ -681,7 +695,11 @@ addExtensionsToFlags ::
   IO (Either String GHC.DynFlags)
 addExtensionsToFlags es ds fp flags = catchErrors $ do
   (stringToStringBuffer -> buf) <- readFileUTF8' fp
+#if MIN_VERSION_ghc(9,4,0)
   let (_, opts) = getOptions (initParserOpts flags) buf fp
+#else
+  let opts = getOptions flags buf fp
+#endif
       withExts =
         flip (foldl' xopt_unset) ds
           . flip (foldl' xopt_set) es
