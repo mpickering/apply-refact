@@ -36,7 +36,6 @@ library
                , refact >= 0.2
                , ghc-boot-th
                , ghc-exactprint ^>= 1.6.0 || ^>= 1.5.0
-               , ghc-paths
                , containers >= 0.6.0.1 && < 0.7
                , extra >= 1.7.3
                , syb >= 0.7.1

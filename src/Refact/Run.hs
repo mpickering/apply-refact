@@ -8,6 +8,7 @@ import Data.Maybe
 import Data.Version
 import Debug.Trace
 import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+import qualified GHC.Paths
 import Options.Applicative
 import Paths_apply_refact
 import Refact.Apply (parseExtensions)
@@ -87,7 +88,7 @@ runPipe Options {..} file = do
           "Invalid extensions: " ++ intercalate ", " invalidExts
         m <-
           either (onError "runPipe") applyFixities
-            =<< parseModuleWithArgs (enabledExts, disabledExts) file
+            =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
         when optionsDebug (putStrLn (showAst m))
         apply optionsPos optionsStep inp (Just file) verb m
 

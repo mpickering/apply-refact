@@ -15,6 +15,11 @@ import Refact.Types (Refactoring, SrcSpan)
 
 -- | Apply a set of refactorings as supplied by HLint
 applyRefactorings ::
+  -- | FilePath to [GHC's libdir](https://downloads.haskell.org/ghc/latest/docs/users_guide/using.html#ghc-flag---print-libdir).
+  --
+  -- It is possible to use @libdir@ from [ghc-paths package](https://hackage.haskell.org/package/ghc-paths), but note
+  -- this will make it difficult to provide a binary distribution of your program.
+  FilePath ->
   -- | Apply hints relevant to a specific position
   Maybe (Int, Int) ->
   -- | 'Refactoring's to apply. Each inner list corresponds to an HLint
@@ -35,12 +40,12 @@ applyRefactorings ::
   -- with the @LANGUAGE@ pragmas, pragmas win.
   [String] ->
   IO String
-applyRefactorings optionsPos inp file exts = do
+applyRefactorings libdir optionsPos inp file exts = do
   let (enabled, disabled, invalid) = parseExtensions exts
   unless (null invalid) . fail $ "Unsupported extensions: " ++ intercalate ", " invalid
   m <-
     either (onError "apply") applyFixities
-      =<< parseModuleWithArgs (enabled, disabled) file
+      =<< parseModuleWithArgs libdir (enabled, disabled) file
   apply optionsPos False ((mempty,) <$> inp) (Just file) Silent m
 
 -- | Like 'applyRefactorings', but takes a parsed module rather than a file path to parse.
