@@ -1,3 +1,5 @@
+  * #134, Make libdir a parameter instead of using GHC.Paths.libdir (@fendor)
+
 v0.11.0.0
   * support GHC 9.4
 
