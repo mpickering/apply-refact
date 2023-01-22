@@ -39,7 +39,6 @@ import Debug.Trace
 import qualified GHC
 import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
-import qualified GHC.Paths
 import Language.Haskell.GHC.ExactPrint
   ( ExactPrint,
     exactPrint,
@@ -712,10 +711,11 @@ addExtensionsToFlags es ds fp flags = catchErrors $ do
         . GHC.handleSourceError (pure . Left . show)
 
 parseModuleWithArgs ::
+  LibDir ->
   ([Extension], [Extension]) ->
   FilePath ->
   IO (Either Errors GHC.ParsedSource)
-parseModuleWithArgs (es, ds) fp = ghcWrapper GHC.Paths.libdir $ do
+parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
   initFlags <- initDynFlags fp
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
   case eflags of
