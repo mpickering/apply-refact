@@ -111,10 +111,14 @@ import qualified GHC.Data.Strict as Strict
 import GHC.Data.StringBuffer (stringToStringBuffer)
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Driver.Config.Parser
-import GHC.Driver.Errors.Types (ErrorMessages, ghcUnknownMessage)
+import GHC.Driver.Errors.Types (ErrorMessages, ghcUnknownMessage, GhcMessage)
 #endif
 import GHC.Driver.Session hiding (initDynFlags)
+#if MIN_VERSION_ghc(9,6,0)
+import GHC.Hs hiding (Pat, Stmt, parseModuleName)
+#else
 import GHC.Hs hiding (Pat, Stmt)
+#endif
 import GHC.Parser.Header (getOptions)
 #if MIN_VERSION_ghc(9,4,0)
 import GHC.Types.Error (getMessages)
@@ -145,7 +149,11 @@ import Refact.Types (Refactoring)
 
 type MonadFail' = MonadFail
 
+#if MIN_VERSION_ghc(9,6,0)
+type Module = Located (HsModule GhcPs)
+#else
 type Module = Located HsModule
+#endif
 
 type Errors = ErrorMessages
 
@@ -153,7 +161,9 @@ onError :: String -> Errors -> a
 onError s = pprPanic s . vcat . ppp
 
 ppp :: Errors -> [SDoc]
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,6,0)
+ppp pst = concatMap unDecorated $ fmap ((diagnosticMessage (defaultDiagnosticOpts @GhcMessage)) . errMsgDiagnostic) $ bagToList $ getMessages pst
+#elif MIN_VERSION_ghc(9,4,0)
 ppp pst = concatMap unDecorated $ fmap (diagnosticMessage . errMsgDiagnostic) $ bagToList $ getMessages pst
 #else
 ppp pst = concatMap unDecorated (errMsgDiagnostic <$> bagToList pst)
