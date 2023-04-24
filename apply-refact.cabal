@@ -35,12 +35,12 @@ library
   build-depends: base >=4.15 && < 5
                , refact >= 0.2
                , ghc-boot-th
-               , ghc-exactprint ^>= 1.6.0 || ^>= 1.5.0
+               , ghc-exactprint ^>= 1.6.0 || ^>= 1.5.0 || ^>= 1.6.0 || ^>= 1.7.0
                , containers >= 0.6.0.1 && < 0.7
                , extra >= 1.7.3
                , syb >= 0.7.1
                , process >= 1.6
-               , transformers >= 0.5.6.2 && < 0.6
+               , transformers >= 0.5.6.2 && < 0.7
                , filemanip >= 0.3.6.3 && < 0.4
                , uniplate >= 1.6.13
                , unix-compat >= 0.5.2
