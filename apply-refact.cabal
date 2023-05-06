@@ -18,7 +18,7 @@ extra-source-files:  CHANGELOG
                    , tests/examples/*.hs
                    , tests/examples/*.hs.refact
                    , tests/examples/*.hs.expected
-tested-with:         GHC==9.4.2, GHC==9.2.5
+tested-with:         GHC==9.6.1, GHC==9.4.5, GHC==9.2.7
 
 
 source-repository head
@@ -35,7 +35,7 @@ library
   build-depends: base >=4.15 && < 5
                , refact >= 0.2
                , ghc-boot-th
-               , ghc-exactprint ^>= 1.6.0 || ^>= 1.5.0 || ^>= 1.6.0 || ^>= 1.7.0
+               , ghc-exactprint ^>= 1.5.0 || ^>= 1.6.0 || ^>= 1.7.0
                , containers >= 0.6.0.1 && < 0.7
                , extra >= 1.7.3
                , syb >= 0.7.1
