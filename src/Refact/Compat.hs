@@ -120,7 +120,9 @@ import GHC.Hs hiding (Pat, Stmt, parseModuleName)
 import GHC.Hs hiding (Pat, Stmt)
 #endif
 import GHC.Parser.Header (getOptions)
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,8,0)
+import GHC.Types.Error (defaultDiagnosticOpts, getMessages)
+#elif MIN_VERSION_ghc(9,4,0)
 import GHC.Types.Error (getMessages)
 #endif
 import GHC.Types.Fixity  ( Fixity(..) )
