@@ -1,3 +1,6 @@
+v0.14.0.0
+  * #144, support GHC 9.8
+
 v0.13.0.0
   * #137, support GHC 9.6 (@9999years)
 
