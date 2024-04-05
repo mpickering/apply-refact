@@ -725,8 +725,7 @@ parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
       liftIO $ writeIORef' dynFlagsRef (Just flags)
       res <- parseModuleEpAnnsWithCppInternal defaultCppOptions flags fp
 
-      -- pure $ postParseTransform res rigidLayout
-      case postParseTransform res of
+      case postParseTransform' res of
         Left e -> pure (Left e)
         Right ast -> pure $ Right (makeDeltaAst ast)
 
@@ -769,3 +768,25 @@ readExtension s = flagSpecFlag <$> find ((== s) . flagSpecName) xFlags
 dynFlagsRef :: IORef (Maybe GHC.DynFlags)
 dynFlagsRef = unsafePerformIO $ newIORef Nothing
 {-# NOINLINE dynFlagsRef #-}
+
+-- A wrapper around @ghc-exactprint@'s @postParseTransform@, that prepends injected
+-- comments to the beginning of the parsed module before passing it to the underlying
+--  @postParseTransform@, which ignores them.
+postParseTransform' :: Either a ([GHC.LEpaComment], GHC.DynFlags, GHC.ParsedSource)
+                    -> Either a GHC.ParsedSource
+postParseTransform' = postParseTransform . fmap attachCommentsToSource
+  where
+    attachCommentsToSource (cm, df, ps)
+      | GHC.L s m <- ps
+      , GHC.HsModule { hsmodExt = ext }   <- m
+      , GHC.XModulePs { hsmodAnn = ann }  <- ext
+      , GHC.EpAnn { comments = comments } <- ann =
+         let ann' = ann { GHC.comments = prepredEpaComments cm comments }
+             ext' = ext { GHC.hsmodAnn = ann' }
+             m'   = m   { GHC.hsmodExt = ext' }
+         in  ([], df, GHC.L s m')
+      | otherwise = (cm, df, ps)
+
+    prepredEpaComments cm = \case
+      GHC.EpaCommentsBalanced p f -> GHC.EpaCommentsBalanced (cm ++ p) f
+      GHC.EpaComments f           -> GHC.EpaCommentsBalanced cm f

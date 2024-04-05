@@ -1,0 +1,1 @@
+[("T140A.hs:8:14: Suggestion: Redundant $\nFound:\n  print $ \"test\"\nPerhaps:\n  print \"test\"\n",[Replace {rtype = Expr, pos = SrcSpan {startLine = 8, startCol = 8, endLine = 8, endCol = 22}, subts = [("a",SrcSpan {startLine = 8, startCol = 8, endLine = 8, endCol = 13}),("b",SrcSpan {startLine = 8, startCol = 16, endLine = 8, endCol = 22})], orig = "a b"}])]
