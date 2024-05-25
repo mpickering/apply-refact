@@ -7,7 +7,6 @@ import Data.List hiding (find)
 import Data.Maybe
 import Data.Version
 import Debug.Trace
-import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 import qualified GHC.Paths
 import Options.Applicative
 import Paths_apply_refact
@@ -89,7 +88,6 @@ runPipe Options {..} file = do
         m <-
           either (onError "runPipe") applyFixities
             =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
-        when optionsDebug (putStrLn (showAst m))
         apply optionsPos optionsStep inp (Just file) verb m
 
   if optionsInplace && isJust optionsTarget

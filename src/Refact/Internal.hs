@@ -48,19 +48,10 @@ import Language.Haskell.GHC.ExactPrint
     exactPrint,
     getEntryDP,
     makeDeltaAst,
-    runTransform,
     setEntryDP,
-    transferEntryDP,
-    transferEntryDP',
   )
-import Language.Haskell.GHC.ExactPrint.ExactPrint
-  ( EPOptions,
-    epRigidity,
-    exactPrintWithOptions,
-    stringOptions,
-  )
+import Language.Haskell.GHC.ExactPrint.ExactPrint (exactPrintWithOptions)
 import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
@@ -71,12 +62,15 @@ import Refact.Compat
     Module,
     ReplaceWorker,
     -- combineSrcSpans,
+    addCommentsToSrcAnn,
     combineSrcSpansA,
     composeSrcSpan,
     getOptions,
     gopt_set,
     handleGhcException,
     impliedXFlags,
+    lEpaCommentRealSrcSpan,
+    mkAnchor,
     mkErr,
     occName,
     occNameString,
@@ -84,10 +78,14 @@ import Refact.Compat
     parseDynamicFilePragma,
     parseModuleName,
     ppr,
+    refactOptions,
     setSrcSpanFile,
     showSDocUnsafe,
+    srcSpanAnnDeltaPos,
     srcSpanToAnnSpan,
     stringToStringBuffer,
+    transferEntryDP,
+    transferEntryDP',
     xFlags,
     xopt_set,
     xopt_unset,
@@ -117,9 +115,6 @@ import Refact.Utils
 import System.IO.Error (mkIOError)
 import System.IO.Extra
 import System.IO.Unsafe (unsafePerformIO)
-
-refactOptions :: EPOptions Identity String
-refactOptions = stringOptions {epRigidity = RigidLayout}
 
 -- | Apply a set of refactorings as supplied by hlint
 apply ::
@@ -321,9 +316,9 @@ runRefactoring m = \case
                 (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 0)
                 comment =
                   GHC.L
-                    (GHC.Anchor r (GHC.MovedAnchor dp))
+                    (mkAnchor r dp)
                     (GHC.EpaComment (GHC.EpaLineComment newComment) r)
-                l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])
+                l'' = addCommentsToSrcAnn l' (GHC.EpaComments [comment])
              in GHC.L l'' d'
           else old
   RemoveAsKeyword {..} -> pure (removeAsKeyword m)
@@ -337,7 +332,13 @@ runRefactoring m = \case
 modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
 modifyComment pos newComment = transformBi go
   where
-#if MIN_VERSION_ghc(9,4,0)
+#if MIN_VERSION_ghc(9,10,0)
+    newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
+    newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
+    newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+    newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+    newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+#elif MIN_VERSION_ghc(9,4,0)
     newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
     newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
     newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
@@ -356,10 +357,11 @@ modifyComment pos newComment = transformBi go
 #endif
 
     go :: GHC.LEpaComment -> GHC.LEpaComment
-    go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
-      if ss2pos l == ss2pos (GHC.realSrcSpan pos)
-        then GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r)
-        else old
+    go old@(GHC.L loc (GHC.EpaComment t r)) =
+      let mrss = lEpaCommentRealSrcSpan old
+      in if fmap ss2pos mrss == Just (ss2pos (GHC.realSrcSpan pos))
+           then GHC.L loc (GHC.EpaComment (newTok t) r)
+           else old
 
 droppedComments :: [Refactoring GHC.SrcSpan] -> Module -> Module -> Bool
 droppedComments rs orig_m m = not (all (`elem` current_comments) orig_comments)
@@ -478,7 +480,7 @@ resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
 doGenReplacement _ p new old
   | p old = do
-    let (new', _, _) = runTransform $ transferEntryDP old new
+    let new' = transferEntryDP old new
     put True
     pure new'
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
@@ -509,7 +511,7 @@ doGenReplacement _ p new old
             newMatch
             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
             newGRHSs
-        (newWithLocalBinds, _, _) = runTransform $ transferEntryDP' old newWithLocalBinds0
+        newWithLocalBinds = transferEntryDP' old newWithLocalBinds0
 
     put True
     pure $ composeSrcSpan newWithLocalBinds
@@ -591,14 +593,17 @@ replaceWorker m parser seed Replace {..} = do
             _ -> True
           e' =
             if isDo
+#if MIN_VERSION_ghc(9,10,0)
+#else
               && manchorOp an == Just (GHC.MovedAnchor (GHC.SameLine 0))
-              && manchorOp (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+#endif
+              && srcSpanAnnDeltaPos ls == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1)))
               else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
           e' =
-            if manchorOp (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            if srcSpanAnnDeltaPos lb == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)))
               else e
       ensureExprSpace e = e
@@ -616,9 +621,12 @@ replaceWorker m parser seed Replace {..} = do
     _ -> pure m
 replaceWorker m _ _ _ = pure m
 
+#if MIN_VERSION_ghc(9,10,0)
+#else
 manchorOp :: GHC.EpAnn ann -> Maybe GHC.AnchorOperation
 manchorOp GHC.EpAnnNotUsed = Nothing
 manchorOp (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
+#endif
 
 data NotFound = NotFound
   { nfExpected :: String,
