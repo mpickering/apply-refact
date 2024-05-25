@@ -7,8 +7,10 @@ import Control.Monad.Trans.State
 import Data.Generics hiding (Fixity)
 import Data.Maybe
 import qualified GHC
-import Language.Haskell.GHC.ExactPrint
-import Refact.Compat (Fixity (..), SourceText (..), occNameString, rdrNameOcc)
+import qualified Language.Haskell.GHC.ExactPrint as EP
+import Refact.Compat (
+  Fixity (..), OpAppAnn, SourceText (..), occNameString, rdrNameOcc,
+  transferEntryDP)
 import Refact.Utils
 
 -- | Rearrange infix expressions to account for fixity.
@@ -20,7 +22,7 @@ applyFixities m = fst <$> runStateT (everywhereM (mkM expFix) m) ()
 expFix :: Expr -> StateT () IO Expr
 expFix (GHC.L loc (GHC.OpApp an l op r)) =
   mkOpAppRn baseFixities loc an l op (findFixity baseFixities op) r
-expFix e = return e
+expFix e = pure e
 
 getIdent :: Expr -> String
 getIdent (GHC.unLoc -> GHC.HsVar _ (GHC.L _ n)) = occNameString . rdrNameOcc $ n
@@ -31,7 +33,7 @@ getIdent _ = error "Must be HsVar"
 mkOpAppRn ::
   [(String, GHC.Fixity)] ->
   GHC.SrcSpanAnnA ->
-  GHC.EpAnn [GHC.AddEpAnn] ->
+  OpAppAnn ->
   Expr -> -- Left operand; already rearranged
   Expr ->
   GHC.Fixity -> -- Operator and fixity
@@ -41,15 +43,15 @@ mkOpAppRn ::
 -- (e11 `op1` e12) `op2` e2
 mkOpAppRn fs loc an e1@(GHC.L _ (GHC.OpApp x1 e11 op1 e12)) op2 fix2 e2
   | nofix_error =
-    return $ GHC.L loc (GHC.OpApp an e1 op2 e2)
+    pure $ GHC.L loc (GHC.OpApp an e1 op2 e2)
   | associate_right = do
     -- liftIO $ putStrLn $ "mkOpAppRn:1:e1" ++ showAst e1
-    let e12' = setEntryDP e12 (GHC.SameLine 0)
+    let e12' = EP.setEntryDP e12 (GHC.SameLine 0)
     new_e <- mkOpAppRn fs loc' an e12' op2 fix2 e2
-    let (new_e',_,_) = runTransform $ transferEntryDP e12 new_e
-    let res = GHC.L loc (GHC.OpApp x1 e11 op1 new_e')
+    let new_e' = transferEntryDP e12 new_e
+        res = GHC.L loc (GHC.OpApp x1 e11 op1 new_e')
     -- liftIO $ putStrLn $ "mkOpAppRn:1:res" ++ showAst res
-    return res
+    pure res
   where
     loc' = GHC.combineLocsA e12 e2
     fix1 = findFixity fs op1
@@ -59,15 +61,15 @@ mkOpAppRn fs loc an e1@(GHC.L _ (GHC.OpApp x1 e11 op1 e12)) op2 fix2 e2
 --      (- neg_arg) `op` e2
 mkOpAppRn fs loc an e1@(GHC.L _ (GHC.NegApp an' neg_arg neg_name)) op2 fix2 e2
   | nofix_error =
-    return (GHC.L loc (GHC.OpApp an e1 op2 e2))
+    pure (GHC.L loc (GHC.OpApp an e1 op2 e2))
   | associate_right =
     do
       -- liftIO $ putStrLn $ "mkOpAppRn:2:e1" ++ showAst e1
       new_e <- mkOpAppRn fs loc' an neg_arg op2 fix2 e2
-      let new_e' = setEntryDP new_e (GHC.SameLine 0)
-      let res = setEntryDP (GHC.L loc (GHC.NegApp an' new_e' neg_name)) (GHC.SameLine 0)
+      let new_e' = EP.setEntryDP new_e (GHC.SameLine 0)
+      let res = EP.setEntryDP (GHC.L loc (GHC.NegApp an' new_e' neg_name)) (GHC.SameLine 0)
       -- liftIO $ putStrLn $ "mkOpAppRn:2:res" ++ showAst res
-      return res
+      pure res
   where
     loc' = GHC.combineLocsA neg_arg e2
     (nofix_error, associate_right) = GHC.compareFixity GHC.negateFixity fix2
@@ -78,7 +80,7 @@ mkOpAppRn _ loc an e1 op1 fix1 e2@(GHC.L _ GHC.NegApp {}) -- NegApp can occur on
   | not associate_right -- We *want* right association
     = do
     -- liftIO $ putStrLn $ "mkOpAppRn:3:e1" ++ showAst (GHC.L loc (GHC.OpApp an e1 op1 e2))
-    return $ GHC.L loc (GHC.OpApp an e1 op1 e2)
+    pure $ GHC.L loc (GHC.OpApp an e1 op1 e2)
   where
     (_, associate_right) = GHC.compareFixity fix1 GHC.negateFixity
 
@@ -87,7 +89,7 @@ mkOpAppRn _ loc an e1 op1 fix1 e2@(GHC.L _ GHC.NegApp {}) -- NegApp can occur on
 mkOpAppRn _ loc an e1 op _fix e2 -- Default case, no rearrangment
   = do
   -- liftIO $ putStrLn $ "mkOpAppRn:4:e1" ++ showAst (GHC.L loc (GHC.OpApp an e1 op e2))
-  return $ GHC.L loc (GHC.OpApp an e1 op e2)
+  pure $ GHC.L loc (GHC.OpApp an e1 op e2)
 
 -- ---------------------------------------------------------------------
 

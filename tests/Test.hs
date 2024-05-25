@@ -42,7 +42,6 @@ mkTests files = testGroup "Unit tests" (map mkTest files)
                   , optionsVerbosity     = Silent
                   , optionsStep          = False
                   , optionsRoundtrip     = False
-                  , optionsDebug         = False
                   , optionsVersion       = False
                   , optionsLanguage      = ["LambdaCase"]
                   , optionsPos           = Nothing

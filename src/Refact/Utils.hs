@@ -1,5 +1,7 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Refact.Utils
   ( -- * Synonyms
@@ -39,13 +41,14 @@ import Data.Data
 import Data.Generics (everywhere, mkT)
 import Data.Typeable
 import qualified GHC
-import Language.Haskell.GHC.ExactPrint
 import Refact.Compat
   ( AnnSpan,
     FastString,
     FunBind,
     Module,
     annSpanToSrcSpan,
+    fromSrcSpanAnn,
+    toSrcSpanAnn,
     mkFastString,
     setAnnSpanFile,
     setRealSrcSpanFile,
@@ -53,6 +56,7 @@ import Refact.Compat
     srcSpanToAnnSpan,
     pattern RealSrcLoc',
     pattern RealSrcSpan',
+    transferEntryDP,
   )
 import qualified Refact.Types as R
 
@@ -102,9 +106,9 @@ modifyAnnKey _m e1 e2 = do
   -- liftIO $ putStrLn $ "modifyAnnKey:e2" ++ showAst e2
   let e2_0 = handleBackquotes e1 e2
   -- liftIO $ putStrLn $ "modifyAnnKey:e2_0" ++ showAst e2_0
-  let (e2', _, _) = runTransform $ transferEntryDP e1 e2_0
+  let e2' = transferEntryDP e1 e2_0
   -- liftIO $ putStrLn $ "modifyAnnKey:e2'" ++ showAst e2'
-  return e2'
+  pure e2'
 
 -- | This function handles backquotes in two scenarios:
 --
@@ -118,7 +122,7 @@ modifyAnnKey _m e1 e2 = do
 --        should keep the backquotes, but currently no test case fails because of it.
 handleBackquotes ::
   forall t old new.
-  (Data t, Data old, Data new, Monoid t, Typeable t) =>
+  (Data t, Data old, Data new, Typeable t) =>
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
   GHC.LocatedAn t new
@@ -131,17 +135,20 @@ handleBackquotes old new@(GHC.L loc _) =
         ln' =
           if GHC.locA l == GHC.locA loc
             then case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
-              Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.SrcSpanAnn (GHC.EpAnn _ ann _) _) _)))
+              Just (GHC.L _ (GHC.HsVar _ (GHC.L (fromSrcSpanAnn -> (GHC.EpAnn _ ann _, _)) _)))
                 -- scenario 1
                 | GHC.NameAnn GHC.NameBackquotes _ _ _ _ <- ann ->
-                  case ln of
-                    (GHC.SrcSpanAnn (GHC.EpAnn a _ cs) ll) -> GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
-                    (GHC.SrcSpanAnn GHC.EpAnnNotUsed ll) ->
-                      GHC.SrcSpanAnn (GHC.EpAnn (GHC.spanAsAnchor ll) ann GHC.emptyComments) ll
+                  case fromSrcSpanAnn ln of
+                    (GHC.EpAnn a _ cs, ll) -> toSrcSpanAnn (GHC.EpAnn a ann cs) ll
+#if MIN_VERSION_ghc(9,10,0)
+#else
+                    (GHC.EpAnnNotUsed, ll) ->
+                      toSrcSpanAnn (GHC.EpAnn (GHC.spanAsAnchor ll) ann GHC.emptyComments) ll
+#endif
                 -- scenario 2
-                | GHC.SrcSpanAnn (GHC.EpAnn a ann' cs) ll <- ln,
+                | (GHC.EpAnn a ann' cs, ll) <- fromSrcSpanAnn ln,
                   GHC.NameAnn GHC.NameBackquotes _ _ _ _ <- ann' ->
-                  GHC.SrcSpanAnn (GHC.EpAnn a ann cs) ll
+                  toSrcSpanAnn (GHC.EpAnn a ann cs) ll
               Just _ -> ln
               Nothing -> ln
             else ln
