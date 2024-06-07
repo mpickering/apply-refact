@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ConstraintKinds #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE PatternSynonyms #-}
 
 module Refact.Compat (
@@ -108,6 +109,7 @@ module Refact.Compat (
 #endif
 
   -- * ghc-exactprint stuff
+  makeDeltaAst,
   refactOptions,
   transferEntryDP,
   transferEntryDP'
@@ -279,7 +281,9 @@ fromSrcSpanAnn (GHC.SrcSpanAnn ann s) = (ann, s)
 
 #if MIN_VERSION_ghc(9,10,0)
 srcSpanAnnDeltaPos :: GHC.EpAnn ann -> Maybe GHC.DeltaPos
-srcSpanAnnDeltaPos (GHC.EpAnn (GHC.EpaDelta dp _) _ _) = Just dp
+srcSpanAnnDeltaPos = \case
+  GHC.EpAnn (GHC.EpaDelta dp _) _ _ -> Just dp
+  _ -> Nothing
 #else
 srcSpanAnnDeltaPos :: GHC.SrcAnn ann -> Maybe GHC.DeltaPos
 srcSpanAnnDeltaPos srcAnn = case GHC.ann srcAnn of
@@ -402,4 +406,11 @@ refactOptions :: EP.EPOptions Identity String
 refactOptions = EP.stringOptions
 #else
 refactOptions = EP.stringOptions {EP.epRigidity = EP.RigidLayout}
+#endif
+
+makeDeltaAst :: EP.ExactPrint ast => ast -> ast
+#if MIN_VERSION_ghc(9,10,0)
+makeDeltaAst = id
+#else
+makeDeltaAst = EP.makeDeltaAst
 #endif
