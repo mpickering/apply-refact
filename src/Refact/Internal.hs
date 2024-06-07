@@ -47,7 +47,6 @@ import Language.Haskell.GHC.ExactPrint
   ( ExactPrint,
     exactPrint,
     getEntryDP,
-    makeDeltaAst,
     setEntryDP,
   )
 import Language.Haskell.GHC.ExactPrint.ExactPrint (exactPrintWithOptions)
@@ -70,6 +69,7 @@ import Refact.Compat
     handleGhcException,
     impliedXFlags,
     lEpaCommentRealSrcSpan,
+    makeDeltaAst,
     mkAnchor,
     mkErr,
     occName,
@@ -678,7 +678,15 @@ findLargestExpression ::
   AnnSpan ->
   GHC.LocatedAn an a ->
   Maybe (GHC.LocatedAn an a)
-findLargestExpression as e@(getAnnSpanA -> l) = if l == as then Just e else Nothing
+findLargestExpression as e@(getAnnSpanA -> l) =
+  if l == as
+    then
+#if MIN_VERSION_ghc(9,10,0)
+      Just (setEntryDP e (GHC.SameLine 1))
+#else
+      Just e
+#endif
+    else Nothing
 
 findOrError ::
   forall a an modu m.
