@@ -480,7 +480,7 @@ resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
 doGenReplacement _ p new old
   | p old = do
-    let new' = transferEntryDP old new
+    let new' = setEntryDP (transferEntryDP old new) (GHC.SameLine 1)
     put True
     pure new'
   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
@@ -577,7 +577,7 @@ replaceWorker m parser seed Replace {..} = do
   (newExpr, ()) <-
     runStateT
       -- (substTransform m subts template)
-      (substTransform m subts (makeDeltaAst template))
+      (substTransform m subts (setEntryDP (makeDeltaAst template) (GHC.SameLine 0)))
       -- (mergeAnns as relat, keyMap)
       ()
   -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
