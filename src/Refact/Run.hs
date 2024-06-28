@@ -7,11 +7,11 @@ import Data.List hiding (find)
 import Data.Maybe
 import Data.Version
 import Debug.Trace
-import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
 import qualified GHC.Paths
 import Options.Applicative
 import Paths_apply_refact
 import Refact.Apply (parseExtensions)
+import Refact.Compat (showAst)
 import Refact.Fixity
 import Refact.Internal
   ( Verbosity (..),
