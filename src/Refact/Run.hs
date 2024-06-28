@@ -11,6 +11,7 @@ import qualified GHC.Paths
 import Options.Applicative
 import Paths_apply_refact
 import Refact.Apply (parseExtensions)
+import Refact.Compat (showAst)
 import Refact.Fixity
 import Refact.Internal
   ( Verbosity (..),
@@ -88,6 +89,7 @@ runPipe Options {..} file = do
         m <-
           either (onError "runPipe") applyFixities
             =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
+        when optionsDebug (putStrLn (showAst m))
         apply optionsPos optionsStep inp (Just file) verb m
 
   if optionsInplace && isJust optionsTarget

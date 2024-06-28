@@ -110,7 +110,8 @@ module Refact.Compat (
   -- * ghc-exactprint stuff
   refactOptions,
   transferEntryDP,
-  transferEntryDP'
+  transferEntryDP',
+  showAst
 ) where
 
 import Control.Monad.Trans.State.Strict (StateT)
@@ -165,9 +166,19 @@ import GHC.Utils.Panic
 import Language.Haskell.GHC.ExactPrint.Parsers (Parser)
 import qualified Language.Haskell.GHC.ExactPrint as EP
 import qualified Language.Haskell.GHC.ExactPrint.ExactPrint as EP
-import qualified Language.Haskell.GHC.ExactPrint.Types as EP
-import Language.Haskell.GHC.ExactPrint.Utils
+import Language.Haskell.GHC.ExactPrint.Utils (badRealSrcSpan)
 import Refact.Types (Refactoring)
+
+#if MIN_VERSION_ghc_exactprint(1,9,0)
+import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+#else
+
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+#endif
+
+#if !MIN_VERSION_ghc_exactprint(1,10,0)
+import qualified Language.Haskell.GHC.ExactPrint.Types as EP
+#endif
 
 type MonadFail' = MonadFail
 

@@ -21,6 +21,7 @@ data Options = Options
     optionsVerbosity :: Verbosity,
     -- | Ask before applying each hint
     optionsStep :: Bool,
+    optionsDebug :: Bool,
     optionsRoundtrip :: Bool,
     optionsVersion :: Bool,
     optionsLanguage :: [String],
@@ -68,6 +69,13 @@ options = do
         [ short 's',
           long "step",
           help "Ask before applying each refactoring"
+        ]
+  optionsDebug <-
+    switch $
+      mconcat
+        [ long "debug",
+          help "Output the GHC AST for debugging",
+          internal
         ]
   optionsRoundtrip <-
     switch $

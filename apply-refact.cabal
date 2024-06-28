@@ -22,7 +22,7 @@ extra-source-files:
   tests/examples/*.hs.expected
   tests/examples/*.hs.refact
 
-tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.3 || ==9.8.1
+tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.3 || ==9.8.1 || ==9.10.1
 
 source-repository head
   type:     git
@@ -44,7 +44,7 @@ library
     , extra           >=1.7.3
     , filemanip       >=0.3.6.3 && <0.4
     , ghc-boot-th
-    , ghc-exactprint  ^>=1.5.0  || ^>=1.6.0 || ^>=1.7.0 || ^>=1.8.0 || ^>=1.9.0 || ^>=1.10.0
+    , ghc-exactprint  ^>=1.5.0  || ^>=1.6.0 || ^>=1.7.0 || ^>=1.8.0 || ^>=1.10.0
     , process         >=1.6
     , refact          >=0.2
     , syb             >=0.7.1
