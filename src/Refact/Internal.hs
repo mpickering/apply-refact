@@ -736,7 +736,11 @@ parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
         Left e -> pure (Left e)
+#if MIN_VERSION_ghc_exactprint(1,10,0)
+        Right ast -> pure $ Right ast
+#else
         Right ast -> pure $ Right (makeDeltaAst ast)
+#endif
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@

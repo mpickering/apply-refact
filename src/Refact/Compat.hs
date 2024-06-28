@@ -280,6 +280,7 @@ fromSrcSpanAnn (GHC.SrcSpanAnn ann s) = (ann, s)
 #if MIN_VERSION_ghc(9,10,0)
 srcSpanAnnDeltaPos :: GHC.EpAnn ann -> Maybe GHC.DeltaPos
 srcSpanAnnDeltaPos (GHC.EpAnn (GHC.EpaDelta dp _) _ _) = Just dp
+srcSpanAnnDeltaPos _ = Nothing
 #else
 srcSpanAnnDeltaPos :: GHC.SrcAnn ann -> Maybe GHC.DeltaPos
 srcSpanAnnDeltaPos srcAnn = case GHC.ann srcAnn of
