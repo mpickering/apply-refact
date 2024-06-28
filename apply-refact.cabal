@@ -16,11 +16,12 @@ homepage:           https://github.com/mpickering/apply-refact
 bug-reports:        https://github.com/mpickering/apply-refact/issues
 build-type:         Simple
 extra-source-files:
-  CHANGELOG
   README.md
   tests/examples/*.hs
   tests/examples/*.hs.expected
   tests/examples/*.hs.refact
+extra-doc-files:
+  CHANGELOG
 
 tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.5 || ==9.8.2 || ==9.10.1
 
