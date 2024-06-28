@@ -22,7 +22,7 @@ extra-source-files:
   tests/examples/*.hs.expected
   tests/examples/*.hs.refact
 
-tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.3 || ==9.8.1 || ==9.10.1
+tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.5 || ==9.8.2 || ==9.10.1
 
 source-repository head
   type:     git
