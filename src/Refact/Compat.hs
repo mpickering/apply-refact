@@ -410,7 +410,7 @@ refactOptions = EP.stringOptions {EP.epRigidity = EP.RigidLayout}
 
 makeDeltaAst :: EP.ExactPrint ast => ast -> ast
 #if MIN_VERSION_ghc(9,10,0)
-makeDeltaAst = id
+makeDeltaAst = EP.makeDeltaAst
 #else
 makeDeltaAst = EP.makeDeltaAst
 #endif
