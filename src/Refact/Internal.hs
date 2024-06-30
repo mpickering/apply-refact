@@ -577,7 +577,11 @@ replaceWorker m parser seed Replace {..} = do
   (newExpr, ()) <-
     runStateT
       -- (substTransform m subts template)
-      (substTransform m subts (setEntryDP (makeDeltaAst template) (GHC.SameLine 0)))
+#if MIN_VERSION_ghc(9,10,0)
+      (substTransform m subts (makeDeltaAst template))
+#else
+      (substTransform m subts (makeDeltaAst template))
+#endif
       -- (mergeAnns as relat, keyMap)
       ()
   -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
@@ -768,7 +772,11 @@ parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
         Left e -> pure (Left e)
+#if MIN_VERSION_ghc(9,10,0)
+        Right ast -> pure $ Right ast
+#else
         Right ast -> pure $ Right (makeDeltaAst ast)
+#endif
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@
