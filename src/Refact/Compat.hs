@@ -102,6 +102,7 @@ module Refact.Compat (
   setSrcSpanFile,
   srcSpanToAnnSpan,
   AnnSpan,
+  showAst,
 
 #if MIN_VERSION_ghc(9,4,0)
   -- * GHC 9.4 stuff
@@ -170,6 +171,13 @@ import qualified Language.Haskell.GHC.ExactPrint.ExactPrint as EP
 import qualified Language.Haskell.GHC.ExactPrint.Types as EP
 import Language.Haskell.GHC.ExactPrint.Utils
 import Refact.Types (Refactoring)
+
+#if MIN_VERSION_ghc_exactprint(1,9,0)
+import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+#else
+
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+#endif
 
 type MonadFail' = MonadFail
 

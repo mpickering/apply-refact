@@ -88,6 +88,7 @@ import Refact.Compat
     transferEntryDP',
     xFlags,
     xopt_set,
+    showAst,
     xopt_unset,
     pattern RealSrcSpan',
 #if MIN_VERSION_ghc(9,4,0)
@@ -115,6 +116,7 @@ import Refact.Utils
 import System.IO.Error (mkIOError)
 import System.IO.Extra
 import System.IO.Unsafe (unsafePerformIO)
+import Unsafe.Coerce
 
 -- | Apply a set of refactorings as supplied by hlint
 apply ::
@@ -194,6 +196,8 @@ runRefactorings verb m0 ((rs, ss) : rest) = do
       let (overlaps, rest') = span (overlap ss . snd) rest
       when (verb >= Normal) . for_ overlaps $ \(rs', _) ->
         traceM $ "Ignoring " ++ show rs' ++ " due to overlap."
+      liftIO $ do
+        putStrLn $ "AFTER refactoring, m = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m)
       runRefactorings verb m rest'
 runRefactorings _ m [] = pure m
 
@@ -295,7 +299,16 @@ runRefactoring m = \case
       ModuleName -> replaceWorker m (parseModuleName (pos r)) seed r
       Import -> replaceWorker m parseImport seed r
   ModifyComment {..} -> pure (modifyComment pos newComment m)
-  Delete {rtype, pos} -> pure (f m)
+  Delete {rtype, pos} -> liftIO $ do
+    let res = (f m)
+        res', m' :: Module
+        res' = (unsafeCoerce res)
+        m' = unsafeCoerce m
+    putStrLn $ "before delete import = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m')
+    putStrLn $ "after delete import = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions res')
+    putStrLn $ "after delete import AST = " <> showAst m'
+    pure res
+
     where
       annSpan = srcSpanToAnnSpan pos
       f = case rtype of
@@ -584,7 +597,10 @@ replaceWorker m parser seed Replace {..} = do
 #endif
       -- (mergeAnns as relat, keyMap)
       ()
-  -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
+  -- let newExpr' :: GHC.LocatedA (GHC.ImportDecl GHC.GhcPs)
+  --     newExpr' = unsafeCoerce newExpr
+  -- putStrLn $ "newExpr = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions newExpr')
+  -- -- Add a space if needed, so that we avoid refactoring `y = do(foo bar)` into `y = dofoo bar`.
   -- ensureDoSpace :: Anns -> Anns
   let ensureSpace :: forall t. (Data t) => t -> t
       ensureSpace = everywhere (mkT ensureExprSpace)

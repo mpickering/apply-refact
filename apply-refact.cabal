@@ -64,12 +64,8 @@ library
   if (impl(ghc >=9.2) && impl(ghc <9.3))
     build-depends: ghc ^>=9.2
 
-<<<<<<< HEAD
   if impl(ghc <9.10)
     build-depends: data-default-class
-
-=======
->>>>>>> bc4eaba (GHC 9.10)
   default-extensions:
     FlexibleContexts
     FlexibleInstances

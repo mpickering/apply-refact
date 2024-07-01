@@ -1,4 +1,6 @@
 {-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE CPP #-}
 
 module Refact.Run (refactMain, runPipe) where
 
@@ -25,6 +27,77 @@ import System.Exit
 import System.FilePath.Find
 import System.IO.Extra
 import qualified System.PosixCompat.Files as F
+import Data.Functor.Identity (Identity (..))
+import Language.Haskell.GHC.ExactPrint.ExactPrint (exactPrintWithOptions)
+import qualified GHC
+import qualified GHC.Utils.Outputable as GHC
+import Refact.Compat
+  ( AnnSpan,
+    DoGenReplacement,
+    Errors,
+    FlagSpec (..),
+    FunBind,
+    Module,
+    ReplaceWorker,
+    -- combineSrcSpans,
+    addCommentsToSrcAnn,
+    combineSrcSpansA,
+    composeSrcSpan,
+    getOptions,
+    gopt_set,
+    handleGhcException,
+    impliedXFlags,
+    lEpaCommentRealSrcSpan,
+    makeDeltaAst,
+    mkAnchor,
+    mkErr,
+    occName,
+    occNameString,
+    onError,
+    parseDynamicFilePragma,
+    parseModuleName,
+    ppr,
+    refactOptions,
+    setSrcSpanFile,
+    showSDocUnsafe,
+    srcSpanAnnDeltaPos,
+    srcSpanToAnnSpan,
+    stringToStringBuffer,
+    transferEntryDP,
+    transferEntryDP',
+    xFlags,
+    xopt_set,
+    xopt_unset,
+    pattern RealSrcSpan',
+#if MIN_VERSION_ghc(9,4,0)
+    mkGeneratedHsDocString,
+    initParserOpts
+#endif
+  )
+
+dbg :: GHC.Outputable a => a -> String
+dbg = GHC.showSDocUnsafe . GHC.ppr
+
+tgt :: FilePath
+tgt = "/home/zliu41/apply-refact/tests/examples/Import7.hs"
+
+opts :: Options
+opts = Options
+  { -- | Where to process hints
+    optionsTarget = Just tgt,
+    -- | The refactorings to process
+    optionsRefactFile = Just "/home/zliu41/apply-refact/tests/examples/Import7.hs.refact",
+    optionsInplace = False,
+    -- | Whether to overwrite the file inplace
+    optionsOutput = Nothing,
+    optionsVerbosity = Silent,
+    -- | Ask before applying each hint
+    optionsStep = False,
+    optionsRoundtrip = False,
+    optionsVersion = False,
+    optionsLanguage  = [],
+    optionsPos = Nothing
+  }
 
 refactMain :: IO ()
 refactMain = do
@@ -88,6 +161,7 @@ runPipe Options {..} file = do
         m <-
           either (onError "runPipe") applyFixities
             =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
+        putStrLn $ "m ======== " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m)
         apply optionsPos optionsStep inp (Just file) verb m
 
   if optionsInplace && isJust optionsTarget
