@@ -26,6 +26,10 @@ import Control.Monad.IO.Class (MonadIO (..))
 import Control.Monad.Trans.Maybe (MaybeT (..))
 import Control.Monad.Trans.State.Strict
 import Data.Data
+#if MIN_VERSION_ghc(9,10,0)
+#else
+import Data.Default.Class
+#endif
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
 import Data.Generics (everywhere, everywhereM, extM, listify, mkM, mkQ, mkT, something)
@@ -681,10 +685,30 @@ findOrError m = either f pure . findInModule m
 -- Deletion from a list
 
 doDeleteStmt :: Data a => (Stmt -> Bool) -> a -> a
-doDeleteStmt = transformBi . filter
+doDeleteStmt = transformBi . filterAndSetDP
 
 doDeleteImport :: Data a => (Import -> Bool) -> a -> a
-doDeleteImport = transformBi . filter
+doDeleteImport = transformBi . filterAndSetDP
+
+-- | Like `filter`, but after filtering one or multiple consecutive elements
+-- out, it applies `setEntryDP` to the next element.
+filterAndSetDP ::
+  forall t a.
+#if MIN_VERSION_ghc(9,10,0)
+#else
+  (Default t) =>
+#endif
+  (GHC.LocatedAn t a -> Bool) ->
+  [GHC.LocatedAn t a] ->
+  [GHC.LocatedAn t a]
+filterAndSetDP p = go
+  where
+    go xs = case break p xs of
+      (_, []) -> []
+      -- No prefix is filtered out; do not apply `setEntryDP` to `y`
+      ([], y : ys) -> y : go ys
+      -- Some prefix is filtered out; apply `setEntryDP` to `y`
+      (_ : _, y : ys) -> setEntryDP y (GHC.SameLine 0) : go ys
 
 addExtensionsToFlags ::
   [Extension] ->
