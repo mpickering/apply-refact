@@ -1,168 +1,198 @@
-cabal-version:       3.0
+cabal-version:      3.0
+name:               apply-refact
+version:            0.14.0.0
+synopsis:           Perform refactorings specified by the refact library.
+description:
+  Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
 
-name:                apply-refact
-version:             0.14.0.0
-synopsis:            Perform refactorings specified by the refact library.
-description:         Perform refactorings specified by the refact library. It is primarily used with HLint's --refactor flag.
-license:             BSD-3-Clause
-license-file:        LICENSE
-author:              Matthew Pickering
-maintainer:          matthewtpickering@gmail.com
+license:            BSD-3-Clause
+license-file:       LICENSE
+author:             Matthew Pickering
+maintainer:         matthewtpickering@gmail.com
+
 -- copyright:
-category:            Development
-homepage:            https://github.com/mpickering/apply-refact
-bug-reports:         https://github.com/mpickering/apply-refact/issues
-build-type:          Simple
-extra-source-files:  CHANGELOG
-                   , README.md
-                   , tests/examples/*.hs
-                   , tests/examples/*.hs.refact
-                   , tests/examples/*.hs.expected
-tested-with:         GHC==9.8.1, GHC==9.6.3, GHC==9.4.6, GHC==9.2.8
+category:           Development
+homepage:           https://github.com/mpickering/apply-refact
+bug-reports:        https://github.com/mpickering/apply-refact/issues
+build-type:         Simple
+extra-source-files:
+  CHANGELOG
+  README.md
+  tests/examples/*.hs
+  tests/examples/*.hs.expected
+  tests/examples/*.hs.refact
 
+tested-with:        GHC ==9.2.8 || ==9.4.6 || ==9.6.3 || ==9.8.1
 
 source-repository head
   type:     git
   location: https://github.com/mpickering/apply-refact.git
 
 library
-  exposed-modules:   Refact.Utils
-                   , Refact.Apply
-                   , Refact.Fixity
-                   , Refact.Internal
-                   , Refact.Compat
-  GHC-Options: -Wall
-  build-depends: base >=4.16 && < 5
-               , refact >= 0.2
-               , ghc-boot-th
-               , ghc-exactprint ^>= 1.5.0 || ^>= 1.6.0 || ^>= 1.7.0 || ^>= 1.8.0
-               , containers >= 0.6.0.1 && < 0.8
-               , extra >= 1.7.3
-               , syb >= 0.7.1
-               , process >= 1.6
-               , transformers >= 0.5.6.2 && < 0.7
-               , filemanip >= 0.3.6.3 && < 0.4
-               , uniplate >= 1.6.13
-               , unix-compat >= 0.5.2
-               , directory >= 1.3
-  if (impl(ghc >= 9.8) && impl(ghc < 9.9))
-    build-depends: ghc ^>= 9.8
-  if (impl(ghc >= 9.6) && impl(ghc < 9.7))
-    build-depends: ghc ^>= 9.6
-  if (impl(ghc >= 9.4) && impl(ghc < 9.5))
-    build-depends: ghc ^>= 9.4
-  if (impl(ghc >= 9.2) && impl(ghc < 9.3))
-    build-depends: ghc ^>= 9.2
+  exposed-modules:
+    Refact.Apply
+    Refact.Compat
+    Refact.Fixity
+    Refact.Internal
+    Refact.Utils
 
-  default-extensions:  FlexibleContexts
-                     , FlexibleInstances
-                     , FunctionalDependencies
-                     , GADTs
-                     , LambdaCase
-                     , MultiParamTypeClasses
-                     , NamedFieldPuns
-                     , PolyKinds
-                     , RankNTypes
-                     , ScopedTypeVariables
-                     , TupleSections
-                     , TypeApplications
-                     , TypeOperators
-  hs-source-dirs:      src
-  default-language:    Haskell2010
+  ghc-options:        -Wall
+  build-depends:
+    , base            >=4.16    && <5
+    , containers      >=0.6.0.1 && <0.8
+    , data-default
+    , directory       >=1.3
+    , extra           >=1.7.3
+    , filemanip       >=0.3.6.3 && <0.4
+    , ghc-boot-th
+    , ghc-exactprint  ^>=1.5.0  || ^>=1.6.0 || ^>=1.7.0 || ^>=1.8.0
+    , process         >=1.6
+    , refact          >=0.2
+    , syb             >=0.7.1
+    , transformers    >=0.5.6.2 && <0.7
+    , uniplate        >=1.6.13
+    , unix-compat     >=0.5.2
+
+  if (impl(ghc >=9.8) && impl(ghc <9.9))
+    build-depends: ghc ^>=9.8
+
+  if (impl(ghc >=9.6) && impl(ghc <9.7))
+    build-depends: ghc ^>=9.6
+
+  if (impl(ghc >=9.4) && impl(ghc <9.5))
+    build-depends: ghc ^>=9.4
+
+  if (impl(ghc >=9.2) && impl(ghc <9.3))
+    build-depends: ghc ^>=9.2
+
+  if impl(ghc <9.10)
+    build-depends: data-default-class
+
+  default-extensions:
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    LambdaCase
+    MultiParamTypeClasses
+    NamedFieldPuns
+    PolyKinds
+    RankNTypes
+    ScopedTypeVariables
+    TupleSections
+    TypeApplications
+    TypeOperators
+
+  hs-source-dirs:     src
+  default-language:   Haskell2010
 
 executable refactor
-  main-is: Main.hs
+  main-is:            Main.hs
   other-modules:
-                 Paths_apply_refact
-                 Refact.Apply
-                 Refact.Compat
-                 Refact.Fixity
-                 Refact.Internal
-                 Refact.Options
-                 Refact.Run
-                 Refact.Utils
-  autogen-modules:
-                 Paths_apply_refact
-  hs-source-dirs:      src
-  default-language: Haskell2010
-  ghc-options: -Wall -fno-warn-unused-do-bind
-  build-depends: base
-               , refact
-               , ghc-exactprint
-               , ghc
-               , ghc-boot-th
-               , ghc-paths
-               , containers
-               , extra
-               , syb
-               , process
-               , directory
-               , optparse-applicative >= 0.15.1.0
-               , filemanip
-               , unix-compat
-               , filepath
-               , transformers
-               , uniplate
-  default-extensions:  FlexibleContexts
-                     , FlexibleInstances
-                     , FunctionalDependencies
-                     , GADTs
-                     , LambdaCase
-                     , MultiParamTypeClasses
-                     , NamedFieldPuns
-                     , PolyKinds
-                     , RankNTypes
-                     , ScopedTypeVariables
-                     , TupleSections
-                     , TypeApplications
-                     , TypeOperators
+    Paths_apply_refact
+    Refact.Apply
+    Refact.Compat
+    Refact.Fixity
+    Refact.Internal
+    Refact.Options
+    Refact.Run
+    Refact.Utils
 
-Test-Suite test
-  type:                exitcode-stdio-1.0
-  hs-source-dirs:      tests, src
-  main-is:             Test.hs
+  autogen-modules:    Paths_apply_refact
+  hs-source-dirs:     src
+  default-language:   Haskell2010
+  ghc-options:        -Wall -fno-warn-unused-do-bind
+  build-depends:
+    , base
+    , containers
+    , data-default
+    , directory
+    , extra
+    , filemanip
+    , filepath
+    , ghc
+    , ghc-boot-th
+    , ghc-exactprint
+    , ghc-paths
+    , optparse-applicative  >=0.15.1.0
+    , process
+    , refact
+    , syb
+    , transformers
+    , uniplate
+    , unix-compat
+
+  if impl(ghc <9.10)
+    build-depends: data-default-class
+
+  default-extensions:
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    LambdaCase
+    MultiParamTypeClasses
+    NamedFieldPuns
+    PolyKinds
+    RankNTypes
+    ScopedTypeVariables
+    TupleSections
+    TypeApplications
+    TypeOperators
+
+test-suite test
+  type:               exitcode-stdio-1.0
+  hs-source-dirs:     tests src
+  main-is:            Test.hs
   other-modules:
-                 Paths_apply_refact
-                 Refact.Apply
-                 Refact.Compat
-                 Refact.Fixity
-                 Refact.Internal
-                 Refact.Options
-                 Refact.Run
-                 Refact.Utils
-  ghc-options:         -threaded
-  default-language:    Haskell2010
-  build-depends:  tasty
-                , tasty-golden
-                , tasty-expected-failure
-                , base
-                , refact
-                , ghc-exactprint
-                , ghc
-                , ghc-boot-th
-                , ghc-paths
-                , containers
-                , extra
-                , syb
-                , process
-                , directory
-                , optparse-applicative
-                , filemanip
-                , unix-compat
-                , filepath
-                , silently
-                , transformers
-                , uniplate
-  default-extensions:  FlexibleContexts
-                     , FlexibleInstances
-                     , FunctionalDependencies
-                     , GADTs
-                     , LambdaCase
-                     , MultiParamTypeClasses
-                     , NamedFieldPuns
-                     , PolyKinds
-                     , RankNTypes
-                     , ScopedTypeVariables
-                     , TupleSections
-                     , TypeApplications
-                     , TypeOperators
+    Paths_apply_refact
+    Refact.Apply
+    Refact.Compat
+    Refact.Fixity
+    Refact.Internal
+    Refact.Options
+    Refact.Run
+    Refact.Utils
+
+  ghc-options:        -threaded
+  default-language:   Haskell2010
+  build-depends:
+    , base
+    , containers
+    , directory
+    , extra
+    , filemanip
+    , filepath
+    , ghc
+    , ghc-boot-th
+    , ghc-exactprint
+    , ghc-paths
+    , optparse-applicative
+    , process
+    , refact
+    , silently
+    , syb
+    , tasty
+    , tasty-expected-failure
+    , tasty-golden
+    , transformers
+    , uniplate
+    , unix-compat
+
+  if impl(ghc <9.10)
+    build-depends: data-default-class
+
+  default-extensions:
+    FlexibleContexts
+    FlexibleInstances
+    FunctionalDependencies
+    GADTs
+    LambdaCase
+    MultiParamTypeClasses
+    NamedFieldPuns
+    PolyKinds
+    RankNTypes
+    ScopedTypeVariables
+    TupleSections
+    TypeApplications
+    TypeOperators
