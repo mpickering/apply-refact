@@ -6,6 +6,7 @@
 module Refact.Utils
   ( -- * Synonyms
     Module,
+    CompleteModule (..),
     Stmt,
     Expr,
     Decl,
@@ -16,6 +17,8 @@ module Refact.Utils
     FunBind,
     pattern RealSrcLoc',
     pattern RealSrcSpan',
+    DoGenReplacement,
+    ReplaceWorker,
 
     -- * Monad
     M,
@@ -41,6 +44,7 @@ import Data.Data
 import Data.Generics (everywhere, mkT)
 import Data.Typeable
 import qualified GHC
+import Language.Haskell.GHC.ExactPrint.Parsers (Parser)
 import Refact.Compat
   ( AnnSpan,
     FastString,
@@ -77,6 +81,26 @@ type Name = GHC.LocatedN GHC.RdrName
 type Stmt = GHC.ExprLStmt GHC.GhcPs
 
 type Import = GHC.LImportDecl GHC.GhcPs
+
+data CompleteModule = CompleteModule
+  { cmSpan :: Module
+  , cmDelta :: Module
+  }
+
+type DoGenReplacement an ast =
+  (Data ast) =>
+  Int ->
+  GHC.LocatedAn an ast ->
+  GHC.LocatedAn an ast ->
+  StateT (Bool, Int) IO (GHC.LocatedAn an ast)
+
+type ReplaceWorker a =
+  (Data a) =>
+  CompleteModule ->
+  Parser (GHC.LocatedA a) ->
+  Int ->
+  R.Refactoring GHC.SrcSpan ->
+  IO CompleteModule
 
 getAnnSpanA :: forall an a. GHC.LocatedAn an a -> AnnSpan
 getAnnSpanA = srcSpanToAnnSpan . GHC.getLocA

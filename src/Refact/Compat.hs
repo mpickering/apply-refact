@@ -89,10 +89,8 @@ module Refact.Compat (
   -- * Non-GHC stuff
   -- AnnKeyMap,
   FunBind,
-  DoGenReplacement,
   Module,
   MonadFail',
-  ReplaceWorker,
   annSpanToSrcSpan,
   badAnnSpan,
   mkErr,
@@ -170,7 +168,6 @@ import qualified Language.Haskell.GHC.ExactPrint as EP
 import qualified Language.Haskell.GHC.ExactPrint.ExactPrint as EP
 import qualified Language.Haskell.GHC.ExactPrint.Types as EP
 import Language.Haskell.GHC.ExactPrint.Utils
-import Refact.Types (Refactoring)
 
 #if MIN_VERSION_ghc_exactprint(1,9,0)
 import Language.Haskell.GHC.ExactPrint.Utils (showAst)
@@ -367,22 +364,6 @@ parseModuleName :: SrcSpan -> Parser (LocatedA GHC.ModuleName)
 parseModuleName ss _ _ s =
   let newMN =  GHC.L (GHC.noAnnSrcSpan ss) (GHC.mkModuleName s)
   in pure newMN
-
-type DoGenReplacement an ast a =
-  (Data ast, Data a) =>
-  a ->
-  (LocatedAn an ast -> Bool) ->
-  LocatedAn an ast ->
-  LocatedAn an ast ->
-  StateT Bool IO (LocatedAn an ast)
-
-type ReplaceWorker a mod =
-  (Data a, Data mod) =>
-  mod ->
-  Parser (GHC.LocatedA a) ->
-  Int ->
-  Refactoring SrcSpan ->
-  IO mod
 
 #if MIN_VERSION_ghc_exactprint(1,10,0)
 transferEntryDP ::

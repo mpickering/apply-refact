@@ -33,12 +33,10 @@ import qualified GHC
 import qualified GHC.Utils.Outputable as GHC
 import Refact.Compat
   ( AnnSpan,
-    DoGenReplacement,
     Errors,
     FlagSpec (..),
     FunBind,
     Module,
-    ReplaceWorker,
     -- combineSrcSpans,
     addCommentsToSrcAnn,
     combineSrcSpansA,
@@ -74,19 +72,20 @@ import Refact.Compat
     initParserOpts
 #endif
   )
+import Refact.Utils (CompleteModule (..))
 
-dbg :: GHC.Outputable a => a -> String
-dbg = GHC.showSDocUnsafe . GHC.ppr
+-- dbg :: GHC.Outputable a => a -> String
+-- dbg = GHC.showSDocUnsafe . GHC.ppr
 
 tgt :: FilePath
-tgt = "/home/zliu41/apply-refact/tests/examples/Import7.hs"
+tgt = "/home/zliu41/apply-refact/tests/examples/Default69.hs"
 
 opts :: Options
 opts = Options
   { -- | Where to process hints
     optionsTarget = Just tgt,
     -- | The refactorings to process
-    optionsRefactFile = Just "/home/zliu41/apply-refact/tests/examples/Import7.hs.refact",
+    optionsRefactFile = Just "/home/zliu41/apply-refact/tests/examples/Default69.hs.refact",
     optionsInplace = False,
     -- | Whether to overwrite the file inplace
     optionsOutput = Nothing,
@@ -158,10 +157,10 @@ runPipe Options {..} file = do
         let (enabledExts, disabledExts, invalidExts) = parseExtensions optionsLanguage
         unless (null invalidExts) . when (verb >= Normal) . putStrLn $
           "Invalid extensions: " ++ intercalate ", " invalidExts
-        m <-
-          either (onError "runPipe") applyFixities
+        CompleteModule mSpan0 mDelta0 <-
+          either (onError "runPipe") pure
             =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
-        putStrLn $ "m ======== " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m)
+        m <- CompleteModule <$> applyFixities mSpan0 <*> applyFixities mDelta0
         apply optionsPos optionsStep inp (Just file) verb m
 
   if optionsInplace && isJust optionsTarget

@@ -1,5 +1,6 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ExplicitNamespaces #-}
+{-# LANGUAGE MultiWayIf #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -54,12 +55,10 @@ import Language.Haskell.GHC.ExactPrint.Parsers
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
-    DoGenReplacement,
     Errors,
     FlagSpec (..),
     FunBind,
     Module,
-    ReplaceWorker,
     -- combineSrcSpans,
     addCommentsToSrcAnn,
     combineSrcSpansA,
@@ -99,12 +98,15 @@ import Refact.Compat
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
 import Refact.Utils
-  ( Decl,
+  ( CompleteModule (..),
+    Decl,
+    DoGenReplacement,
     Expr,
     Import,
     M,
     Name,
     Pat,
+    ReplaceWorker,
     Stmt,
     Type,
     -- foldAnnKey,
@@ -126,12 +128,12 @@ apply ::
   Maybe FilePath ->
   Verbosity ->
   -- Anns ->
-  Module ->
+  CompleteModule ->
   IO String
 apply mpos step inp mbfile verb m0 = do
   toGhcSS <-
     maybe
-      ( case GHC.getLoc m0 of
+      ( case GHC.getLoc (cmSpan m0) of
           GHC.UnhelpfulSpan s -> fail $ "Module has UnhelpfulSpan: " ++ show s
           RealSrcSpan' s ->
             pure $ toGhcSrcSpan' (GHC.srcSpanFile s)
@@ -157,13 +159,16 @@ apply mpos step inp mbfile verb m0 = do
     "Applying " ++ (show . sum . map (length . snd . fst) $ allRefacts) ++ " hints"
   when (verb == Loud) . traceM $ show (map fst allRefacts)
 
-  m <-
-    if step
-      then fromMaybe m0 <$> runMaybeT (refactoringLoop m0 allRefacts)
-      else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
+  -- m <-
+  --   if step
+  --     then fromMaybe m0 <$> runMaybeT (refactoringLoop m0 allRefacts)
+  --     else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
+
+  m <- evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
+  -- FIXME: runRefactoringLoop
 
   -- liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
-  pure . snd . runIdentity $ exactPrintWithOptions refactOptions m
+  pure . snd . runIdentity $ exactPrintWithOptions refactOptions (cmDelta m)
 
 spans :: R.SrcSpan -> (Int, Int) -> Bool
 spans R.SrcSpan {..} loc = (startLine, startCol) <= loc && loc <= (endLine, endCol)
@@ -186,9 +191,9 @@ aggregateSrcSpans = \case
 
 runRefactorings ::
   Verbosity ->
-  Module ->
+  CompleteModule ->
   [([Refactoring GHC.SrcSpan], R.SrcSpan)] ->
-  StateT Int IO Module
+  StateT Int IO CompleteModule
 runRefactorings verb m0 ((rs, ss) : rest) = do
   runRefactorings' verb m0 rs >>= \case
     Nothing -> runRefactorings verb m0 rest
@@ -197,25 +202,27 @@ runRefactorings verb m0 ((rs, ss) : rest) = do
       when (verb >= Normal) . for_ overlaps $ \(rs', _) ->
         traceM $ "Ignoring " ++ show rs' ++ " due to overlap."
       liftIO $ do
-        putStrLn $ "AFTER refactoring, m = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m)
+      --   putStrLn $ "AFTER refactoring, m = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m)
+        putStrLn $ "AFTER refactoring, AST = \n" <> showAst (cmDelta m)
       runRefactorings verb m rest'
 runRefactorings _ m [] = pure m
 
 runRefactorings' ::
   Verbosity ->
-  Module ->
+  CompleteModule ->
   [Refactoring GHC.SrcSpan] ->
-  StateT Int IO (Maybe Module)
+  StateT Int IO (Maybe CompleteModule)
 runRefactorings' verb m0 rs = do
   seed <- get
   m <- foldlM runRefactoring m0 rs
-  if droppedComments rs m0 m
-    then do
-      put seed
-      when (verb >= Normal) . traceM $
-        "Ignoring " ++ show rs ++ " since applying them would cause comments to be dropped."
-      pure Nothing
-    else pure $ Just m
+  pure (Just m) -- FIXME: droppedComments
+  -- if droppedComments rs m0 m
+  --   then do
+  --     put seed
+  --     when (verb >= Normal) . traceM $
+  --       "Ignoring " ++ show rs ++ " since applying them would cause comments to be dropped."
+  --     pure Nothing
+  --   else pure $ Just m
 
 overlap :: R.SrcSpan -> R.SrcSpan -> Bool
 overlap s1 s2 =
@@ -231,47 +238,47 @@ data LoopOption = LoopOption
     perform :: MaybeT IO Module
   }
 
-refactoringLoop ::
-  Module ->
-  [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)] ->
-  MaybeT IO Module
-refactoringLoop m [] = pure m
-refactoringLoop m (((_, []), _) : rs) = refactoringLoop m rs
-refactoringLoop m0 hints@(((hintDesc, rs), ss) : rss) = do
-  res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent m0 rs
-  let yAction :: MaybeT IO Module
-      yAction = case res of
-        Just m -> do
-          exactPrint m `seq` pure ()
-          refactoringLoop m $ dropWhile (overlap ss . snd) rss
-        Nothing -> do
-          liftIO $ putStrLn "Hint skipped since applying it would cause comments to be dropped"
-          refactoringLoop m0 rss
-      opts :: [(String, LoopOption)]
-      opts =
-        [ ("y", LoopOption "Apply current hint" yAction),
-          ("n", LoopOption "Don't apply the current hint" (refactoringLoop m0 rss)),
-          ("q", LoopOption "Apply no further hints" (pure m0)),
-          ("d", LoopOption "Discard previous changes" mzero),
-          ( "v",
-            LoopOption
-              "View current file"
-              ( liftIO (putStrLn (exactPrint m0))
-                  >> refactoringLoop m0 hints
-              )
-          ),
-          ("?", LoopOption "Show this help menu" loopHelp)
-        ]
-      loopHelp = do
-        liftIO . putStrLn . unlines . map mkLine $ opts
-        refactoringLoop m0 hints
-      mkLine (c, opt) = c ++ " - " ++ desc opt
-  inp <- liftIO $ do
-    putStrLn hintDesc
-    putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
-    -- In case that the input also comes from stdin
-    withFile "/dev/tty" ReadMode hGetLine
-  maybe loopHelp perform (lookup inp opts)
+-- refactoringLoop ::
+--   Module ->
+--   [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)] ->
+--   MaybeT IO Module
+-- refactoringLoop m [] = pure m
+-- refactoringLoop m (((_, []), _) : rs) = refactoringLoop m rs
+-- refactoringLoop m0 hints@(((hintDesc, rs), ss) : rss) = do
+--   res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent m0 rs
+--   let yAction :: MaybeT IO Module
+--       yAction = case res of
+--         Just m -> do
+--           exactPrint m `seq` pure ()
+--           refactoringLoop m $ dropWhile (overlap ss . snd) rss
+--         Nothing -> do
+--           liftIO $ putStrLn "Hint skipped since applying it would cause comments to be dropped"
+--           refactoringLoop m0 rss
+--       opts :: [(String, LoopOption)]
+--       opts =
+--         [ ("y", LoopOption "Apply current hint" yAction),
+--           ("n", LoopOption "Don't apply the current hint" (refactoringLoop m0 rss)),
+--           ("q", LoopOption "Apply no further hints" (pure m0)),
+--           ("d", LoopOption "Discard previous changes" mzero),
+--           ( "v",
+--             LoopOption
+--               "View current file"
+--               ( liftIO (putStrLn (exactPrint m0))
+--                   >> refactoringLoop m0 hints
+--               )
+--           ),
+--           ("?", LoopOption "Show this help menu" loopHelp)
+--         ]
+--       loopHelp = do
+--         liftIO . putStrLn . unlines . map mkLine $ opts
+--         refactoringLoop m0 hints
+--       mkLine (c, opt) = c ++ " - " ++ desc opt
+--   inp <- liftIO $ do
+--     putStrLn hintDesc
+--     putStrLn $ "Apply hint [" ++ intercalate ", " (map fst opts) ++ "]"
+--     -- In case that the input also comes from stdin
+--     withFile "/dev/tty" ReadMode hGetLine
+--   maybe loopHelp perform (lookup inp opts)
 
 data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
@@ -281,10 +288,9 @@ data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 
 -- | Peform a @Refactoring@.
 runRefactoring ::
-  Data a =>
-  a ->
+  CompleteModule ->
   Refactoring GHC.SrcSpan ->
-  StateT Int IO a
+  StateT Int IO CompleteModule
 runRefactoring m = \case
   r@Replace {} -> do
     seed <- get <* modify (+ 1)
@@ -298,24 +304,19 @@ runRefactoring m = \case
       R.Match -> replaceWorker m parseMatch seed r
       ModuleName -> replaceWorker m (parseModuleName (pos r)) seed r
       Import -> replaceWorker m parseImport seed r
-  ModifyComment {..} -> pure (modifyComment pos newComment m)
-  Delete {rtype, pos} -> liftIO $ do
-    let res = (f m)
-        res', m' :: Module
-        res' = (unsafeCoerce res)
-        m' = unsafeCoerce m
-    putStrLn $ "before delete import = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions m')
-    putStrLn $ "after delete import = " <> (snd . runIdentity $ exactPrintWithOptions refactOptions res')
-    putStrLn $ "after delete import AST = " <> showAst m'
-    pure res
-
+  ModifyComment {..} ->
+    pure $
+      CompleteModule
+        (modifyComment pos newComment (cmSpan m))
+        (modifyComment pos newComment (cmDelta m))
+  Delete {rtype, pos} -> pure $ CompleteModule (f (cmSpan m)) (f (cmDelta m))
     where
       annSpan = srcSpanToAnnSpan pos
       f = case rtype of
         Stmt -> doDeleteStmt ((/= annSpan) . getAnnSpanA)
         Import -> doDeleteImport ((/= annSpan) . getAnnSpanA)
         _ -> id
-  InsertComment {..} -> pure (addComment m)
+  InsertComment {..} -> pure $ CompleteModule (addComment (cmSpan m)) (addComment (cmDelta m))
     where
       addComment = transformBi go
       r = srcSpanToAnnSpan pos
@@ -334,7 +335,7 @@ runRefactoring m = \case
                 l'' = addCommentsToSrcAnn l' (GHC.EpaComments [comment])
              in GHC.L l'' d'
           else old
-  RemoveAsKeyword {..} -> pure (removeAsKeyword m)
+  RemoveAsKeyword {..} -> pure $ CompleteModule (removeAsKeyword (cmSpan m)) (removeAsKeyword (cmDelta m))
     where
       removeAsKeyword = transformBi go
       go :: GHC.LImportDecl GHC.GhcPs -> GHC.LImportDecl GHC.GhcPs
@@ -489,46 +490,117 @@ resolveRdrName ::
   M (GHC.LocatedAn an old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
--- Substitute the template into the original AST.
-doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
-doGenReplacement _ p new old
-  | p old = do
-    let new' = setEntryDP (transferEntryDP old new) (GHC.SameLine 1)
-    put True
-    pure new'
-  -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
-  -- run the replacement on "f a = body", and add "local" back afterwards.
-  -- This is useful for hints like "Eta reduce" and "Redundant where".
-  | Just Refl <- eqT @(GHC.LocatedA ast) @(GHC.LHsDecl GHC.GhcPs),
-    GHC.L _ (GHC.ValD xvald newBind@GHC.FunBind {}) <- new,
-    Just (oldNoLocal, oldLocal) <- stripLocalBind old,
-    (RealSrcSpan' newLocReal) <- GHC.getLocA new,
-    p (composeSrcSpan oldNoLocal) = do
-    let newFile = GHC.srcSpanFile newLocReal
-        newLocal :: GHC.HsLocalBinds GHC.GhcPs
-        newLocal = transformBi (setSrcSpanFile newFile) oldLocal
-        -- newLocalLoc = GHC.getLocA newLocal
-        newLocalLoc = GHC.spanHsLocaLBinds newLocal
-        newMG = GHC.fun_matches newBind
-        GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
-        newGRHSs = GHC.m_grhss newMatch
-        finalLoc = combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) (GHC.getLoc new)
-        newWithLocalBinds0 =
-          setLocalBind
-            newLocal
-            xvald
-            newBind
-            finalLoc
-            newMG
-            (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMG)
-            newMatch
-            (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
-            newGRHSs
-        newWithLocalBinds = transferEntryDP' old newWithLocalBinds0
+dbg :: ExactPrint a => a -> String
+dbg x = snd . runIdentity $ exactPrintWithOptions refactOptions x
 
-    put True
-    pure $ composeSrcSpan newWithLocalBinds
-  | otherwise = pure old
+doGenReplacement :: forall ast. DoGenReplacement GHC.AnnListItem ast
+doGenReplacement exprIdx new old = do
+  idx <- snd <$> get
+  modify' (second (+1))
+  if
+    | idx == exprIdx -> do
+        let new' = setEntryDP (transferEntryDP old new) (GHC.SameLine 1)
+        -- let new' = (transferEntryDP old new)
+        modify' (first (const True))
+        -- let c_old, c_new, c_new' :: GHC.LocatedA (GHC.HsExpr GHC.GhcPs)
+        --     c_old = unsafeCoerce old
+        --     c_new = unsafeCoerce new
+        --     c_new' = unsafeCoerce new'
+        -- liftIO $ do
+        --   putStrLn $ "DOGEN: OLD=" <> dbg c_old
+        --   putStrLn $ "DOGEN: NEW=" <> dbg c_new
+        --   putStrLn $ "DOGEN: NE'=" <> dbg c_new'
+        --   putStrLn $ "DOGEN: OLDAST=" <> showAst c_old
+        --   putStrLn $ "DOGEN: NEWAST=" <> showAst c_new
+        --   putStrLn $ "DOGEN: NE'AST=" <> showAst c_new'
+        pure new'
+    --FIXME: this case
+    -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
+    -- run the replacement on "f a = body", and add "local" back afterwards.
+    -- This is useful for hints like "Eta reduce" and "Redundant where".
+    -- | Just Refl <- eqT @(GHC.LocatedA ast) @(GHC.LHsDecl GHC.GhcPs),
+    --   GHC.L _ (GHC.ValD xvald newBind@GHC.FunBind {}) <- new,
+    --   Just (oldNoLocal, oldLocal) <- stripLocalBind old,
+    --   (RealSrcSpan' newLocReal) <- GHC.getLocA new,
+    --   p (composeSrcSpan oldNoLocal) -> do
+    --     let newFile = GHC.srcSpanFile newLocReal
+    --         newLocal :: GHC.HsLocalBinds GHC.GhcPs
+    --         newLocal = transformBi (setSrcSpanFile newFile) oldLocal
+    --         -- newLocalLoc = GHC.getLocA newLocal
+    --         newLocalLoc = GHC.spanHsLocaLBinds newLocal
+    --         newMG = GHC.fun_matches newBind
+    --         GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+    --         newGRHSs = GHC.m_grhss newMatch
+    --         finalLoc = combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) (GHC.getLoc new)
+    --         newWithLocalBinds0 =
+    --           setLocalBind
+    --             newLocal
+    --             xvald
+    --             newBind
+    --             finalLoc
+    --             newMG
+    --             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMG)
+    --             newMatch
+    --             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
+    --             newGRHSs
+    --         newWithLocalBinds = transferEntryDP' old newWithLocalBinds0
+
+      -- put True
+      -- pure $ composeSrcSpan newWithLocalBinds
+    | otherwise -> pure old
+
+-- Substitute the template into the original AST.
+-- doGenReplacement :: forall ast. DoGenReplacement GHC.AnnListItem ast
+-- doGenReplacement exprIdx new old
+--   | p old = do
+--     let new' = setEntryDP (transferEntryDP old new) (GHC.SameLine 1)
+--     -- let new' = (transferEntryDP old new)
+--     put True
+--     let c_old, c_new, c_new' :: GHC.LocatedA (GHC.HsExpr GHC.GhcPs)
+--         c_old = unsafeCoerce old
+--         c_new = unsafeCoerce new
+--         c_new' = unsafeCoerce new'
+--     liftIO $ do
+--       putStrLn $ "DOGEN: OLD=" <> dbg c_old
+--       putStrLn $ "DOGEN: NEW=" <> dbg c_new
+--       putStrLn $ "DOGEN: NE'=" <> dbg c_new'
+--       putStrLn $ "DOGEN: OLDAST=" <> showAst c_old
+--       putStrLn $ "DOGEN: NEWAST=" <> showAst c_new
+--       putStrLn $ "DOGEN: NE'AST=" <> showAst c_new'
+--     pure new'
+--   -- If "f a = body where local" doesn't satisfy the predicate, but "f a = body" does,
+--   -- run the replacement on "f a = body", and add "local" back afterwards.
+--   -- This is useful for hints like "Eta reduce" and "Redundant where".
+--   | Just Refl <- eqT @(GHC.LocatedA ast) @(GHC.LHsDecl GHC.GhcPs),
+--     GHC.L _ (GHC.ValD xvald newBind@GHC.FunBind {}) <- new,
+--     Just (oldNoLocal, oldLocal) <- stripLocalBind old,
+--     (RealSrcSpan' newLocReal) <- GHC.getLocA new,
+--     p (composeSrcSpan oldNoLocal) = do
+--     let newFile = GHC.srcSpanFile newLocReal
+--         newLocal :: GHC.HsLocalBinds GHC.GhcPs
+--         newLocal = transformBi (setSrcSpanFile newFile) oldLocal
+--         -- newLocalLoc = GHC.getLocA newLocal
+--         newLocalLoc = GHC.spanHsLocaLBinds newLocal
+--         newMG = GHC.fun_matches newBind
+--         GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+--         newGRHSs = GHC.m_grhss newMatch
+--         finalLoc = combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) (GHC.getLoc new)
+--         newWithLocalBinds0 =
+--           setLocalBind
+--             newLocal
+--             xvald
+--             newBind
+--             finalLoc
+--             newMG
+--             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMG)
+--             newMatch
+--             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
+--             newGRHSs
+--         newWithLocalBinds = transferEntryDP' old newWithLocalBinds0
+
+--     put True
+--     pure $ composeSrcSpan newWithLocalBinds
+--   | otherwise = pure old
 
 -- | If the input is a FunBind with a single match, e.g., "foo a = body where x = y"
 -- return "Just (foo a = body, x = y)". Otherwise return Nothing.
@@ -577,11 +649,17 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newMG = origMG {GHC.mg_alts = GHC.L locMG [GHC.L locMatch newMatch]}
     newBind = origBind {GHC.fun_matches = newMG}
 
-replaceWorker :: forall a mod. (ExactPrint a) => ReplaceWorker a mod
+replaceWorker :: forall a. (ExactPrint a) => ReplaceWorker a
 replaceWorker m parser seed Replace {..} = do
   let replExprLocation = srcSpanToAnnSpan pos
       uniqueName = "template" ++ show seed
   let libdir = undefined
+
+  let exprIdx = snd $ execState (transformBiM f (cmSpan m)) (0, -1)
+        where
+          f :: GHC.LocatedA a -> State (Int, Int) (GHC.LocatedA a)
+          f a | getAnnSpanA a == replExprLocation = modify' (\(acc, _) -> (acc, acc)) *> pure a
+              | otherwise = modify' (first (+1)) *> pure a
 
   template <- do
     flags <- maybe (withDynFlags libdir id) pure =<< readIORef dynFlagsRef
@@ -591,9 +669,9 @@ replaceWorker m parser seed Replace {..} = do
     runStateT
       -- (substTransform m subts template)
 #if MIN_VERSION_ghc(9,10,0)
-      (substTransform m subts (makeDeltaAst template))
+      (substTransform (cmSpan m) subts (makeDeltaAst template))
 #else
-      (substTransform m subts (makeDeltaAst template))
+      (substTransform (cmSpan m) subts (makeDeltaAst template))
 #endif
       -- (mergeAnns as relat, keyMap)
       ()
@@ -628,17 +706,25 @@ replaceWorker m parser seed Replace {..} = do
               else e
       ensureExprSpace e = e
 
-      replacementPred = (== replExprLocation) . getAnnSpanA
+      -- replacementPred = (== replExprLocation) . getAnnSpanA
 
-      tt :: GHC.LocatedA a -> StateT Bool IO (GHC.LocatedA a)
-      tt = doGenReplacement m replacementPred newExpr
-      transformation :: mod -> StateT Bool IO mod
+      tt :: GHC.LocatedA a -> StateT (Bool, Int) IO (GHC.LocatedA a)
+      tt = doGenReplacement exprIdx (makeDeltaAst newExpr)
+      transformation :: Module -> StateT (Bool, Int) IO Module
       transformation = transformBiM tt
-  runStateT (transformation m) False >>= \case
-    (finalM, True) ->
+
+  liftIO $ putStrLn $ "DELTA NEWEXPR::: " <> showAst (newExpr)
+  mSpanNew <- runStateT (transformation (cmSpan m)) (False, 0) >>= \case
+    (finalM, (True, _)) ->
       pure (ensureSpace finalM)
     -- Failed to find a replacment so don't make any changes
-    _ -> pure m
+    _ -> pure (cmSpan m)
+  mDeltaNew <- runStateT (transformation (cmDelta m)) (False, 0) >>= \case
+    (finalM, (True, _)) ->
+      pure (ensureSpace finalM)
+    -- Failed to find a replacment so don't make any changes
+    _ -> pure (cmDelta m)
+  pure $ CompleteModule mSpanNew mDeltaNew
 replaceWorker m _ _ _ = pure m
 
 #if MIN_VERSION_ghc(9,10,0)
@@ -774,8 +860,10 @@ parseModuleWithArgs ::
   LibDir ->
   ([Extension], [Extension]) ->
   FilePath ->
-  IO (Either Errors GHC.ParsedSource)
-parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
+  IO (Either Errors CompleteModule)
+parseModuleWithArgs libdir (es, ds) fp = do
+
+ Right cm <- ghcWrapper libdir $ do
   initFlags <- initDynFlags fp
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
   case eflags of
@@ -788,11 +876,10 @@ parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
         Left e -> pure (Left e)
-#if MIN_VERSION_ghc(9,10,0)
-        Right ast -> pure $ Right ast
-#else
-        Right ast -> pure $ Right (makeDeltaAst ast)
-#endif
+        Right ast -> do
+          pure $ Right $ CompleteModule ast (makeDeltaAst ast)
+--  putStrLn $ "DELTA AST: \n" <> showAst (cmDelta cm)
+ pure (Right cm)
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@

@@ -8,10 +8,12 @@ where
 
 import Control.Monad (unless)
 import Data.List (intercalate)
-import Refact.Compat (Module)
+import Data.Tuple.Extra (both)
+import Refact.Compat (makeDeltaAst)
 import Refact.Fixity (applyFixities)
 import Refact.Internal
 import Refact.Types (Refactoring, SrcSpan)
+import Refact.Utils
 
 -- | Apply a set of refactorings as supplied by HLint
 applyRefactorings ::
@@ -43,9 +45,9 @@ applyRefactorings ::
 applyRefactorings libdir optionsPos inp file exts = do
   let (enabled, disabled, invalid) = parseExtensions exts
   unless (null invalid) . fail $ "Unsupported extensions: " ++ intercalate ", " invalid
-  m <-
-    either (onError "apply") applyFixities
+  CompleteModule mSpan0 mDelta0 <- either (onError "apply") pure
       =<< parseModuleWithArgs libdir (enabled, disabled) file
+  m <- CompleteModule <$> applyFixities mSpan0 <*> applyFixities mDelta0
   apply optionsPos False ((mempty,) <$> inp) (Just file) Silent m
 
 -- | Like 'applyRefactorings', but takes a parsed module rather than a file path to parse.
@@ -58,4 +60,7 @@ applyRefactorings' ::
   -- | Parsed module
   Module ->
   IO String
-applyRefactorings' optionsPos inp = apply optionsPos False ((mempty,) <$> inp) Nothing Silent
+applyRefactorings' optionsPos inp =
+  apply optionsPos False ((mempty,) <$> inp) Nothing Silent . makeCompleteModule
+  where
+    makeCompleteModule m = CompleteModule m (makeDeltaAst m)
