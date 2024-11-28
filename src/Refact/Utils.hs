@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -39,7 +40,11 @@ import Data.Data
 import Data.Generics (everywhere, mkT)
 import Data.Typeable
 import qualified GHC
+#if MIN_VERSION_ghc(9,12,0)
+import Language.Haskell.GHC.ExactPrint hiding (transferEntryDP)
+#else
 import Language.Haskell.GHC.ExactPrint
+#endif
 import Refact.Compat
   ( AnnSpan,
     FastString,
@@ -53,8 +58,12 @@ import Refact.Compat
     srcSpanToAnnSpan,
     pattern RealSrcLoc',
     pattern RealSrcSpan',
+#if MIN_VERSION_ghc(9,12,0)
+    transferEntryDP,
+#endif
   )
 import qualified Refact.Types as R
+
 
 -- Types
 -- type M a = StateT (Anns, AnnKeyMap) IO a
@@ -122,6 +131,30 @@ handleBackquotes ::
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
   GHC.LocatedAn t new
+#if MIN_VERSION_ghc(9,12,0)
+handleBackquotes old new@(GHC.L loc _) =
+  everywhere (mkT update) new
+  where
+    update :: GHC.LHsExpr GHC.GhcPs -> GHC.LHsExpr GHC.GhcPs
+    update (GHC.L l (GHC.HsVar x (GHC.L ln n))) = GHC.L l (GHC.HsVar x (GHC.L ln' n))
+      where
+        ln' =
+          if GHC.locA l == GHC.locA loc
+            then case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
+              Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.EpAnn _ ann _) _)))
+                -- scenario 1
+                | GHC.NameAnn (GHC.NameBackquotes _ _) _ _ <- ann ->
+                  case ln of
+                    (GHC.EpAnn a _ cs) -> (GHC.EpAnn a ann cs)
+                -- scenario 2
+                | (GHC.EpAnn a ann' cs) <- ln,
+                  GHC.NameAnn (GHC.NameBackquotes _ _) _ _ <- ann' ->
+                  (GHC.EpAnn a ann cs)
+              Just _ -> ln
+              Nothing -> ln
+            else ln
+    update x = x
+#else
 handleBackquotes old new@(GHC.L loc _) =
   everywhere (mkT update) new
   where
@@ -146,6 +179,7 @@ handleBackquotes old new@(GHC.L loc _) =
               Nothing -> ln
             else ln
     update x = x
+#endif
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> GHC.SrcSpan
