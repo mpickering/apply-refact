@@ -99,6 +99,7 @@ module Refact.Compat (
   commentSrcSpan,
   ann,
   transferEntryDP,
+  transferEntryDP',
 
 #if MIN_VERSION_ghc(9,4,0)
   -- * GHC 9.4 stuff
@@ -161,7 +162,7 @@ import Refact.Types (Refactoring)
 #if MIN_VERSION_ghc(9,12,0)
 import qualified Language.Haskell.GHC.ExactPrint.Transform as Exact
 #else
-import Language.Haskell.GHC.ExactPrint (transferEntryDP)
+import Language.Haskell.GHC.ExactPrint (transferEntryDP, transferEntryDP')
 #endif
 
 type MonadFail' = MonadFail
@@ -301,10 +302,16 @@ transferEntryDP :: (Typeable t1, Typeable t2, Exact.HasTransform m)
 transferEntryDP a b = return $ Exact.transferEntryDP a b
 #endif
 
+#if MIN_VERSION_ghc(9,12,0)
+transferEntryDP' ::(Exact.HasTransform m)
+    => LHsDecl GhcPs -> LHsDecl GhcPs -> m (LHsDecl GhcPs)
+transferEntryDP' a b = return $ Exact.transferEntryDP' a b
+#endif
+
 
 #if MIN_VERSION_ghc(9,12,0)
-ann :: EpAnn a -> EpAnn a
-ann ls = ls
+ann :: EpAnn a -> a
+ann ls = GHC.anns ls
 #else
 ann :: SrcSpanAnn' a -> a
 ann = GHC.ann

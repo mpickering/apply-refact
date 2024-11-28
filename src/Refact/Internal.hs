@@ -1,4 +1,5 @@
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE ExplicitNamespaces #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -53,7 +54,6 @@ import Language.Haskell.GHC.ExactPrint
     makeDeltaAst,
     runTransform,
     setEntryDP,
-    transferEntryDP',
   )
 import Language.Haskell.GHC.ExactPrint.ExactPrint
   ( EPOptions,
@@ -98,6 +98,7 @@ import Refact.Compat
     xopt_unset,
     pattern RealSrcSpan',
     transferEntryDP,
+    transferEntryDP',
     commentSrcSpan,
     ann,
 #if MIN_VERSION_ghc(9,4,0)
@@ -518,7 +519,6 @@ resolveRdrName ::
   M (GHC.LocatedAn an old)
 resolveRdrName m = resolveRdrName' (modifyAnnKey m)
 
--- Substitute the template into the original AST.
 doGenReplacement :: forall ast a. DoGenReplacement GHC.AnnListItem ast a
 doGenReplacement _ p new old
   | p old = do
@@ -536,10 +536,24 @@ doGenReplacement _ p new old
     let newFile = GHC.srcSpanFile newLocReal
         newLocal :: GHC.HsLocalBinds GHC.GhcPs
         newLocal = transformBi (setSrcSpanFile newFile) oldLocal
-        -- newLocalLoc = GHC.getLocA newLocal
         newLocalLoc = GHC.spanHsLocaLBinds newLocal
+        newMG :: GHC.MatchGroup GHC.GhcPs (GHC.LHsExpr GHC.GhcPs)
         newMG = GHC.fun_matches newBind
-        GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+        -- GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+        locMG1 :: GHC.SrcSpanAnnLW
+        GHC.L locMG1 [GHC.L locMatch newMatch] = GHC.mg_alts newMG
+        -- xx :: GHC.SrcSpanAnnLW -> GHC.EpAnn (GHC.AnnList ())
+        -- xx (GHC.EpAnn anc alw cs) = GHC.EpAnn anc (yy alw) cs
+        -- yy :: GHC.AnnList (GHC.EpToken "where") -> GHC.AnnList ()
+        -- yy (GHC.AnnList anc bs semis _ lt) = GHC.AnnList anc bs semis () lt
+   -- = AnnList {
+   --    al_anchor    :: !(Maybe EpaLocation), -- ^ start point of a list having layout
+   --    al_brackets  :: !AnnListBrackets,
+   --    al_semis     :: [EpToken ";"], -- decls
+   --    al_rest      :: !a,
+   --    al_trailing  :: ![TrailingAnn] -- ^ items appearing after the
+
+        locMG = locMG1
         newGRHSs = GHC.m_grhss newMatch
         finalLoc = combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) (GHC.getLoc new)
         newWithLocalBinds0 =
@@ -561,8 +575,9 @@ doGenReplacement _ p new old
 
 
 #if MIN_VERSION_ghc(9,12,0)
-combineSrcSpansLW :: Semigroup a => GHC.EpAnn a -> EpAnn b -> EpAnn b
-combineSrcSpansLW aa ab = aa <> ab
+combineSrcSpansLW :: GHC.SrcSpanAnnA -> GHC.SrcSpanAnnLW -> GHC.SrcSpanAnnLW
+combineSrcSpansLW (GHC.EpAnn anca an csa) (GHC.EpAnn ancb anb csb)
+    = GHC.EpAnn (anca <> ancb) anb (csa <> csb)
 #else
 combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a 
 combineSrcSpansLW = combineSrcSpansA
@@ -606,13 +621,13 @@ setLocalBind ::
   GHC.HsBind GHC.GhcPs ->
   GHC.SrcSpanAnnA ->
   GHC.MatchGroup GHC.GhcPs Expr ->
-  GHC.SrcSpanAnnL ->
-  GHC.Match GHC.GhcPs Expr ->
 #if MIN_VERSION_ghc(9,12,0)
   GHC.SrcSpanAnnLW ->
 #else
-  GHC.SrcSpanAnnA ->
+  GHC.SrcSpanAnnL ->
 #endif
+  GHC.Match GHC.GhcPs Expr ->
+  GHC.SrcSpanAnnA ->
   GHC.GRHSs GHC.GhcPs Expr ->
   Decl
 setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch origGRHSs =
@@ -652,14 +667,14 @@ replaceWorker m parser seed Replace {..} = do
             _ -> True
           e' =
             if isDo
-              && manchorOp an == Just (GHC.SameLine 0)
-              && manchorOp (ann ls) == Just (GHC.SameLine 0)
+              && manchorOp ls == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1)))
               else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
           e' =
-            if manchorOp (ann lb) == Just (GHC.SameLine 0)
+            -- if manchorOp (ann (_ lb)) == Just (GHC.SameLine 0)
+            if manchorOp lb == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)))
               else e
       ensureExprSpace e = e
