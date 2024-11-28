@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -7,8 +8,8 @@ import Control.Monad.Trans.State
 import Data.Generics hiding (Fixity)
 import Data.Maybe
 import qualified GHC
-import Language.Haskell.GHC.ExactPrint
-import Refact.Compat (Fixity (..), SourceText (..), occNameString, rdrNameOcc)
+import Language.Haskell.GHC.ExactPrint hiding (transferEntryDP)
+import Refact.Compat (Fixity (..), SourceText (..), occNameString, rdrNameOcc,transferEntryDP)
 import Refact.Utils
 
 -- | Rearrange infix expressions to account for fixity.
@@ -31,7 +32,11 @@ getIdent _ = error "Must be HsVar"
 mkOpAppRn ::
   [(String, GHC.Fixity)] ->
   GHC.SrcSpanAnnA ->
+#if MIN_VERSION_ghc(9,12,0)
+  GHC.NoExtField ->
+#else
   GHC.EpAnn [GHC.AddEpAnn] ->
+#endif
   Expr -> -- Left operand; already rearranged
   Expr ->
   GHC.Fixity -> -- Operator and fixity
@@ -151,4 +156,8 @@ infix_ = fixity GHC.InfixN
 
 -- Internal: help function for the above definitions.
 fixity :: GHC.FixityDirection -> Int -> [String] -> [(String, GHC.Fixity)]
+#if MIN_VERSION_ghc(9,12,0)
+fixity a p = map (,Fixity p a)
+#else
 fixity a p = map (,Fixity (SourceText "") p a)
+#endif

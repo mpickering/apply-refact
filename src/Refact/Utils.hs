@@ -40,11 +40,7 @@ import Data.Data
 import Data.Generics (everywhere, mkT)
 import Data.Typeable
 import qualified GHC
-#if MIN_VERSION_ghc(9,12,0)
 import Language.Haskell.GHC.ExactPrint hiding (transferEntryDP)
-#else
-import Language.Haskell.GHC.ExactPrint
-#endif
 import Refact.Compat
   ( AnnSpan,
     FastString,
@@ -57,10 +53,8 @@ import Refact.Compat
     setSrcSpanFile,
     srcSpanToAnnSpan,
     pattern RealSrcLoc',
-    pattern RealSrcSpan',
-#if MIN_VERSION_ghc(9,12,0)
-    transferEntryDP,
-#endif
+    pattern RealSrcSpan', AnnConstraint,
+    transferEntryDP
   )
 import qualified Refact.Types as R
 
@@ -101,7 +95,7 @@ getAnnSpan = srcSpanToAnnSpan . GHC.getLoc
 --   GHC.Located new ->
 --   M (GHC.Located new)
 modifyAnnKey ::
-  (Data mod, Data t, Data old, Data new, Monoid t, Typeable t) =>
+  (Data mod, Data t, Data old, Data new, AnnConstraint t, Typeable t) =>
   mod ->
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
@@ -127,7 +121,7 @@ modifyAnnKey _m e1 e2 = do
 --        should keep the backquotes, but currently no test case fails because of it.
 handleBackquotes ::
   forall t old new.
-  (Data t, Data old, Data new, Monoid t, Typeable t) =>
+  (Data t, Data old, Data new, AnnConstraint t, Typeable t) =>
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
   GHC.LocatedAn t new
