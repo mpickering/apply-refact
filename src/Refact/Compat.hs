@@ -4,7 +4,10 @@
 
 module Refact.Compat (
   -- * ApiAnnotation / GHC.Parser.ApiAnnotation
+#if MIN_VERSION_ghc(9,12,0)
+#else
   AnnKeywordId (..),
+#endif
   DeltaPos(..),
 
   -- * BasicTypes / GHC.Types.Basic
@@ -93,6 +96,9 @@ module Refact.Compat (
   setSrcSpanFile,
   srcSpanToAnnSpan,
   AnnSpan,
+  commentSrcSpan,
+  ann,
+  transferEntryDP,
 
 #if MIN_VERSION_ghc(9,4,0)
   -- * GHC 9.4 stuff
@@ -101,7 +107,11 @@ module Refact.Compat (
 ) where
 
 import Control.Monad.Trans.State.Strict (StateT)
+#if MIN_VERSION_ghc(9,12,0)
+import Data.Data (Data, Typeable)
+#else
 import Data.Data (Data)
+#endif
 import qualified GHC
 import GHC.Data.Bag (unitBag, bagToList)
 import GHC.Data.FastString (FastString, mkFastString)
@@ -115,7 +125,7 @@ import GHC.Driver.Errors.Types (ErrorMessages, ghcUnknownMessage, GhcMessage)
 #endif
 import GHC.Driver.Session hiding (initDynFlags)
 #if MIN_VERSION_ghc(9,6,0)
-import GHC.Hs hiding (Pat, Stmt, parseModuleName)
+import GHC.Hs hiding (Pat, Stmt, parseModuleName, ann)
 #else
 import GHC.Hs hiding (Pat, Stmt)
 #endif
@@ -148,6 +158,11 @@ import GHC.Utils.Panic
 import Language.Haskell.GHC.ExactPrint.Parsers (Parser)
 import Language.Haskell.GHC.ExactPrint.Utils
 import Refact.Types (Refactoring)
+#if MIN_VERSION_ghc(9,12,0)
+import qualified Language.Haskell.GHC.ExactPrint.Transform as Exact
+#else
+import Language.Haskell.GHC.ExactPrint (transferEntryDP)
+#endif
 
 type MonadFail' = MonadFail
 
@@ -171,7 +186,11 @@ ppp pst = concatMap unDecorated $ fmap (diagnosticMessage . errMsgDiagnostic) $ 
 ppp pst = concatMap unDecorated (errMsgDiagnostic <$> bagToList pst)
 #endif
 
+#if MIN_VERSION_ghc(9,12,0)
+type FunBind = HsMatchContext (LocatedN RdrName)
+#else
 type FunBind = HsMatchContext GhcPs
+#endif
 
 pattern RealSrcLoc' :: RealSrcLoc -> SrcLoc
 pattern RealSrcLoc' r <- RealSrcLoc r _ where
@@ -266,3 +285,27 @@ type ReplaceWorker a mod =
   Int ->
   Refactoring SrcSpan ->
   IO mod
+
+
+commentSrcSpan :: GHC.LEpaComment -> SrcSpan
+#if MIN_VERSION_ghc(9,12,0)
+commentSrcSpan (GHC.L (GHC.EpaSpan l) _) = l
+commentSrcSpan (GHC.L (GHC.EpaDelta l _ _) _) = l
+#else
+commentSrcSpan (GHC.L (GHC.Anchor l _) _) = GHC.RealSrcSpan l Strict.Nothing
+#endif
+
+#if MIN_VERSION_ghc(9,12,0)
+transferEntryDP :: (Typeable t1, Typeable t2, Exact.HasTransform m)
+  => LocatedAn t1 a -> LocatedAn t2 b -> m (LocatedAn t2 b)
+transferEntryDP a b = return $ Exact.transferEntryDP a b
+#endif
+
+
+#if MIN_VERSION_ghc(9,12,0)
+ann :: EpAnn a -> EpAnn a
+ann ls = ls
+#else
+ann :: SrcSpanAnn' a -> a
+ann = GHC.ann
+#endif

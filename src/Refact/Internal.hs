@@ -41,6 +41,9 @@ import Data.Ord (comparing)
 import Data.Tuple.Extra
 import Debug.Trace
 import qualified GHC
+#if MIN_VERSION_ghc(9,12,0)
+import qualified GHC.Data.Strict as Strict
+#endif
 import GHC.IO.Exception (IOErrorType (..))
 import GHC.LanguageExtensions.Type (Extension (..))
 import Language.Haskell.GHC.ExactPrint
@@ -50,12 +53,14 @@ import Language.Haskell.GHC.ExactPrint
     makeDeltaAst,
     runTransform,
     setEntryDP,
-    transferEntryDP,
     transferEntryDP',
   )
 import Language.Haskell.GHC.ExactPrint.ExactPrint
   ( EPOptions,
+#if MIN_VERSION_ghc(9,12,0)
+#else
     epRigidity,
+#endif
     exactPrintWithOptions,
     stringOptions,
   )
@@ -92,6 +97,9 @@ import Refact.Compat
     xopt_set,
     xopt_unset,
     pattern RealSrcSpan',
+    transferEntryDP,
+    commentSrcSpan,
+    ann,
 #if MIN_VERSION_ghc(9,4,0)
     mkGeneratedHsDocString,
     initParserOpts
@@ -117,9 +125,14 @@ import Refact.Utils
 import System.IO.Error (mkIOError)
 import System.IO.Extra
 import System.IO.Unsafe (unsafePerformIO)
+-- import qualified GHC
 
 refactOptions :: EPOptions Identity String
+#if MIN_VERSION_ghc(9,12,0)
+refactOptions = stringOptions
+#else
 refactOptions = stringOptions {epRigidity = RigidLayout}
+#endif
 
 -- | Apply a set of refactorings as supplied by hlint
 apply ::
@@ -319,11 +332,19 @@ runRefactoring m = \case
                   GHC.SameLine 0 -> GHC.DifferentLine 1 0
                   dp' -> dp'
                 (GHC.L l' d') = setEntryDP (GHC.L l d) (GHC.DifferentLine 1 0)
+#if MIN_VERSION_ghc(9,12,0)
+                comment =
+                  GHC.L
+                    (GHC.EpaDelta (GHC.RealSrcSpan r Strict.Nothing) dp GHC.NoComments)
+                    (GHC.EpaComment (GHC.EpaLineComment newComment) r)
+                l'' = GHC.addCommentsToEpAnn l' (GHC.EpaComments [comment])
+#else
                 comment =
                   GHC.L
                     (GHC.Anchor r (GHC.MovedAnchor dp))
                     (GHC.EpaComment (GHC.EpaLineComment newComment) r)
                 l'' = GHC.addCommentsToSrcAnn l' (GHC.EpaComments [comment])
+#endif
              in GHC.L l'' d'
           else old
   RemoveAsKeyword {..} -> pure (removeAsKeyword m)
@@ -337,6 +358,14 @@ runRefactoring m = \case
 modifyComment :: (Data a) => GHC.SrcSpan -> String -> a -> a
 modifyComment pos newComment = transformBi go
   where
+
+#if MIN_VERSION_ghc(9,12,0)
+    newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
+    newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
+    newTok (GHC.EpaDocOptions _) = GHC.EpaDocOptions newComment
+    newTok (GHC.EpaLineComment _) = GHC.EpaLineComment newComment
+    newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
+#else
 #if MIN_VERSION_ghc(9,4,0)
     newTok :: GHC.EpaCommentTok -> GHC.EpaCommentTok
     newTok (GHC.EpaDocComment _) = GHC.EpaDocComment $ mkGeneratedHsDocString newComment
@@ -354,11 +383,12 @@ modifyComment pos newComment = transformBi go
     newTok (GHC.EpaBlockComment _) = GHC.EpaBlockComment newComment
     newTok GHC.EpaEofComment = GHC.EpaEofComment
 #endif
+#endif
 
     go :: GHC.LEpaComment -> GHC.LEpaComment
-    go old@(GHC.L (GHC.Anchor l o) (GHC.EpaComment t r)) =
-      if ss2pos l == ss2pos (GHC.realSrcSpan pos)
-        then GHC.L (GHC.Anchor l o) (GHC.EpaComment (newTok t) r)
+    go old@(GHC.L anc (GHC.EpaComment t r)) =
+      if ss2pos (GHC.realSrcSpan $ commentSrcSpan old) == ss2pos (GHC.realSrcSpan pos)
+        then GHC.L anc (GHC.EpaComment (newTok t) r)
         else old
 
 droppedComments :: [Refactoring GHC.SrcSpan] -> Module -> Module -> Bool
@@ -434,6 +464,19 @@ exprSub _ _ e = pure e
 -- it is not specific enough. Instead we match on some bigger context which
 -- is contains the located name we want to replace.
 identSub :: Data a => a -> [(String, GHC.SrcSpan)] -> FunBind -> M FunBind
+#if MIN_VERSION_ghc(9,12,0)
+identSub m subs old@(GHC.FunRhs {mc_fun=name}) =
+  resolveRdrName' subst (findOrError m) old subs (GHC.unLoc name)
+  where
+    subst :: FunBind -> Name -> M FunBind
+    subst f@(GHC.FunRhs{}) new = do
+      -- Low level version as we need to combine the annotation information
+      -- from the template RdrName and the original VarPat.
+      -- modify . first $
+      --   replaceAnnKey (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr)
+      pure $ f {GHC.mc_fun=new}
+    subst o _ = pure o
+#else
 identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
   resolveRdrName' subst (findOrError m) old subs name
   where
@@ -445,6 +488,7 @@ identSub m subs old@(GHC.FunRhs (GHC.L _ name) _ _) =
       --   replaceAnnKey (mkAnnKey n) (mkAnnKey fakeExpr) (mkAnnKey new) (mkAnnKey fakeExpr)
       pure $ GHC.FunRhs new b s
     subst o _ = pure o
+#endif
 identSub _ _ e = pure e
 
 -- g is usually modifyAnnKey
@@ -505,7 +549,7 @@ doGenReplacement _ p new old
             newBind
             finalLoc
             newMG
-            (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMG)
+            (combineSrcSpansLW (GHC.noAnnSrcSpan newLocalLoc) locMG)
             newMatch
             (combineSrcSpansA (GHC.noAnnSrcSpan newLocalLoc) locMatch)
             newGRHSs
@@ -514,6 +558,15 @@ doGenReplacement _ p new old
     put True
     pure $ composeSrcSpan newWithLocalBinds
   | otherwise = pure old
+
+
+#if MIN_VERSION_ghc(9,12,0)
+combineSrcSpansLW :: Semigroup a => GHC.EpAnn a -> EpAnn b -> EpAnn b
+combineSrcSpansLW aa ab = aa <> ab
+#else
+combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a 
+combineSrcSpansLW = combineSrcSpansA
+#endif
 
 -- | If the input is a FunBind with a single match, e.g., "foo a = body where x = y"
 -- return "Just (foo a = body, x = y)". Otherwise return Nothing.
@@ -551,7 +604,11 @@ setLocalBind ::
   GHC.MatchGroup GHC.GhcPs Expr ->
   GHC.SrcSpanAnnL ->
   GHC.Match GHC.GhcPs Expr ->
+#if MIN_VERSION_ghc(9,12,0)
+  GHC.SrcSpanAnnLW ->
+#else
   GHC.SrcSpanAnnA ->
+#endif
   GHC.GRHSs GHC.GhcPs Expr ->
   Decl
 setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch origGRHSs =
@@ -591,14 +648,14 @@ replaceWorker m parser seed Replace {..} = do
             _ -> True
           e' =
             if isDo
-              && manchorOp an == Just (GHC.MovedAnchor (GHC.SameLine 0))
-              && manchorOp (GHC.ann ls) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+              && manchorOp an == Just (GHC.SameLine 0)
+              && manchorOp (ann ls) == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1)))
               else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
           e' =
-            if manchorOp (GHC.ann lb) == Just (GHC.MovedAnchor (GHC.SameLine 0))
+            if manchorOp (ann lb) == Just (GHC.SameLine 0)
               then GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)))
               else e
       ensureExprSpace e = e
@@ -616,9 +673,14 @@ replaceWorker m parser seed Replace {..} = do
     _ -> pure m
 replaceWorker m _ _ _ = pure m
 
-manchorOp :: GHC.EpAnn ann -> Maybe GHC.AnchorOperation
-manchorOp GHC.EpAnnNotUsed = Nothing
-manchorOp (GHC.EpAnn a _ _) = Just (GHC.anchor_op a)
+manchorOp :: GHC.EpAnn ann -> Maybe GHC.DeltaPos
+#if MIN_VERSION_ghc(9,12,0)
+manchorOp (GHC.EpAnn (GHC.EpaSpan{}) _ _) = Nothing
+manchorOp (GHC.EpAnn (GHC.EpaDelta _ dp _) _ _) = Just dp
+#else
+manchorOp (GHC.EpAnn (GHC.Anchor _ (GHC.MovedAnchor dp)) _ _) = Just dp
+manchorOp _ = Nothing
+#endif
 
 data NotFound = NotFound
   { nfExpected :: String,
