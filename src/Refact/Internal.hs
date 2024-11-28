@@ -65,7 +65,7 @@ import Language.Haskell.GHC.ExactPrint.ExactPrint
     stringOptions,
   )
 import Language.Haskell.GHC.ExactPrint.Parsers
-import Language.Haskell.GHC.ExactPrint.Types
+-- import Language.Haskell.GHC.ExactPrint.Types
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
@@ -75,7 +75,7 @@ import Refact.Compat
     FunBind,
     Module,
     ReplaceWorker,
-    -- combineSrcSpans,
+
     combineSrcSpansA,
     composeSrcSpan,
     getOptions,
@@ -100,11 +100,11 @@ import Refact.Compat
     transferEntryDP,
     transferEntryDP',
     commentSrcSpan,
-    ann,
-#if MIN_VERSION_ghc(9,4,0)
+    -- ann,
+
     mkGeneratedHsDocString,
-    initParserOpts
-#endif
+    initParserOpts, AnnConstraint
+
   )
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
@@ -510,7 +510,7 @@ resolveRdrName' g f old subs name =
     _ -> pure old
 
 resolveRdrName ::
-  (Data old, Data a, Data an, Typeable an, Monoid an) =>
+  (Data old, Data a, Data an, Typeable an, AnnConstraint an) =>
   a ->
   (AnnSpan -> M (GHC.LocatedAn an old)) ->
   GHC.LocatedAn an old ->
@@ -576,7 +576,7 @@ doGenReplacement _ p new old
 
 #if MIN_VERSION_ghc(9,12,0)
 combineSrcSpansLW :: GHC.SrcSpanAnnA -> GHC.SrcSpanAnnLW -> GHC.SrcSpanAnnLW
-combineSrcSpansLW (GHC.EpAnn anca an csa) (GHC.EpAnn ancb anb csb)
+combineSrcSpansLW (GHC.EpAnn anca _ csa) (GHC.EpAnn ancb anb csb)
     = GHC.EpAnn (anca <> ancb) anb (csa <> csb)
 #else
 combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a 

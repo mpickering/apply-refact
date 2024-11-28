@@ -100,6 +100,8 @@ module Refact.Compat (
   ann,
   transferEntryDP,
   transferEntryDP',
+  AnnConstraint,
+  showAst,
 
 #if MIN_VERSION_ghc(9,4,0)
   -- * GHC 9.4 stuff
@@ -162,7 +164,14 @@ import Refact.Types (Refactoring)
 #if MIN_VERSION_ghc(9,12,0)
 import qualified Language.Haskell.GHC.ExactPrint.Transform as Exact
 #else
-import Language.Haskell.GHC.ExactPrint (transferEntryDP, transferEntryDP')
+import Language.Haskell.GHC.ExactPrint (transferEntryDP, transferEntryDP', showAst)
+#endif
+
+
+#if MIN_VERSION_ghc(9,12,0)
+type AnnConstraint an = (NoAnn an, Semigroup an)
+#else
+type AnnConstraint an = (Monoid an)
 #endif
 
 type MonadFail' = MonadFail
