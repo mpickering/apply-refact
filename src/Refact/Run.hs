@@ -86,11 +86,12 @@ runPipe Options {..} file = do
         let (enabledExts, disabledExts, invalidExts) = parseExtensions optionsLanguage
         unless (null invalidExts) . when (verb >= Normal) . putStrLn $
           "Invalid extensions: " ++ intercalate ", " invalidExts
-        m <-
-          either (onError "runPipe") applyFixities
+        (dfs, m) <-
+          either (onError "apply") pure
             =<< parseModuleWithArgs GHC.Paths.libdir (enabledExts, disabledExts) file
-        when optionsDebug (putStrLn (showAst m))
-        apply optionsPos optionsStep inp (Just file) verb m
+        m' <- applyFixities m
+        when optionsDebug (putStrLn (showAst m'))
+        apply dfs optionsPos optionsStep inp (Just file) verb m'
 
   if optionsInplace && isJust optionsTarget
     then writeFileUTF8 file output
