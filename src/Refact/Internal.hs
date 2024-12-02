@@ -66,6 +66,12 @@ import Language.Haskell.GHC.ExactPrint.ExactPrint
   )
 import Language.Haskell.GHC.ExactPrint.Parsers
 -- import Language.Haskell.GHC.ExactPrint.Types
+#if MIN_VERSION_ghc(9,12,0)
+#else
+import Language.Haskell.GHC.ExactPrint.Types
+    -- epRigidity,
+    -- Rigidity(..),
+#endif
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
@@ -100,7 +106,10 @@ import Refact.Compat
     transferEntryDP,
     transferEntryDP',
     commentSrcSpan,
-    -- ann,
+#if MIN_VERSION_ghc(9,12,0)
+#else
+    ann,
+#endif
 
     mkGeneratedHsDocString,
     initParserOpts, AnnConstraint
@@ -540,7 +549,7 @@ doGenReplacement _ p new old
         newMG :: GHC.MatchGroup GHC.GhcPs (GHC.LHsExpr GHC.GhcPs)
         newMG = GHC.fun_matches newBind
         -- GHC.L locMG [GHC.L locMatch newMatch] = GHC.mg_alts newMG
-        locMG1 :: GHC.SrcSpanAnnLW
+        -- locMG1 :: GHC.SrcSpanAnnLW
         GHC.L locMG1 [GHC.L locMatch newMatch] = GHC.mg_alts newMG
         -- xx :: GHC.SrcSpanAnnLW -> GHC.EpAnn (GHC.AnnList ())
         -- xx (GHC.EpAnn anc alw cs) = GHC.EpAnn anc (yy alw) cs
@@ -667,14 +676,22 @@ replaceWorker m parser seed Replace {..} = do
             _ -> True
           e' =
             if isDo
+#if MIN_VERSION_ghc(9,12,0)
               && manchorOp ls == Just (GHC.SameLine 0)
+#else
+              && manchorOp an == Just (GHC.SameLine 0)
+              && manchorOp (GHC.ann ls) == Just (GHC.SameLine 0)
+#endif
               then GHC.L l (GHC.HsDo an v (setEntryDP (GHC.L ls stmts) (GHC.SameLine 1)))
               else e
       ensureExprSpace e@(GHC.L l (GHC.HsApp x (GHC.L la a) (GHC.L lb b))) = e' -- ensureAppSpace
         where
           e' =
-            -- if manchorOp (ann (_ lb)) == Just (GHC.SameLine 0)
+#if MIN_VERSION_ghc(9,12,0)
             if manchorOp lb == Just (GHC.SameLine 0)
+#else
+            if manchorOp (ann lb) == Just (GHC.SameLine 0)
+#endif
               then GHC.L l (GHC.HsApp x (GHC.L la a) (setEntryDP (GHC.L lb b) (GHC.SameLine 1)))
               else e
       ensureExprSpace e = e
