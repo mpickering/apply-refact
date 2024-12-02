@@ -38,8 +38,7 @@ mkOpAppRn ::
   GHC.EpAnn [GHC.AddEpAnn] ->
 #endif
   Expr -> -- Left operand; already rearranged
-  Expr ->
-  GHC.Fixity -> -- Operator and fixity
+  Expr -> GHC.Fixity -> -- Operator and fixity
   Expr -> -- Right operand (not an OpApp, but might
   -- be a NegApp)
   StateT () IO Expr
