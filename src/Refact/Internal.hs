@@ -588,7 +588,7 @@ combineSrcSpansLW :: GHC.SrcSpanAnnA -> GHC.SrcSpanAnnLW -> GHC.SrcSpanAnnLW
 combineSrcSpansLW (GHC.EpAnn anca _ csa) (GHC.EpAnn ancb anb csb)
     = GHC.EpAnn (anca <> ancb) anb (csa <> csb)
 #else
-combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a 
+combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a
 combineSrcSpansLW = combineSrcSpansA
 #endif
 
@@ -602,9 +602,9 @@ stripLocalBind = \case
     | let origMG = GHC.fun_matches origBind,
       GHC.L locMG [GHC.L locMatch origMatch] <- GHC.mg_alts origMG,
       let origGRHSs = GHC.m_grhss origMatch,
-      [GHC.L _ (GHC.GRHS _ _ (GHC.L loc2 _))] <- GHC.grhssGRHSs origGRHSs ->
+      [GHC.L loc2 _] <- GHC.grhssGRHSs origGRHSs ->
       let loc1 = GHC.getLoc (GHC.fun_id origBind)
-          newLoc = combineSrcSpansA (GHC.l2l loc1) loc2
+          newLoc = combineSrcSpansA (GHC.l2l loc1) (GHC.l2l loc2)
           withoutLocalBinds =
             setLocalBind
               (GHC.EmptyLocalBinds GHC.noExtField)
