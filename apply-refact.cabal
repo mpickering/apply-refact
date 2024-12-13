@@ -180,7 +180,7 @@ test-suite test
     , unix-compat
 
   if impl(ghc <9.10)
-    build-depends: data-default-class
+    build-depends: data-default
 
   default-extensions:
     FlexibleContexts
