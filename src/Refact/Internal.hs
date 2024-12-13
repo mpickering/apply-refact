@@ -28,7 +28,7 @@ import Control.Monad.Trans.State.Strict
 import Data.Data
 #if MIN_VERSION_ghc(9,10,0)
 #else
-import Data.Default.Class
+import Data.Default
 #endif
 import Data.Foldable (foldlM, for_)
 import Data.Functor.Identity (Identity (..))
