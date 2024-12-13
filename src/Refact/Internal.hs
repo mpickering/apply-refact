@@ -525,9 +525,13 @@ stripLocalBind = \case
     | let origMG = GHC.fun_matches origBind,
       GHC.L locMG [GHC.L locMatch origMatch] <- GHC.mg_alts origMG,
       let origGRHSs = GHC.m_grhss origMatch,
+#if MIN_VERSION_ghc(9,12,0)
+      [GHC.L loc2 _] <- GHC.grhssGRHSs origGRHSs ->
+#else
       [GHC.L _ (GHC.GRHS _ _ (GHC.L loc2 _))] <- GHC.grhssGRHSs origGRHSs ->
+#endif
       let loc1 = GHC.getLoc (GHC.fun_id origBind)
-          newLoc = combineSrcSpansA (GHC.l2l loc1) loc2
+          newLoc = combineSrcSpansA (GHC.l2l loc1) (GHC.l2l loc2)
           withoutLocalBinds =
             setLocalBind
               (GHC.EmptyLocalBinds GHC.noExtField)
