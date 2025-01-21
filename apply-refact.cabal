@@ -46,7 +46,7 @@ library
     , filemanip       >=0.3.6.3 && <0.4
     , ghc
     , ghc-boot-th
-    , ghc-exactprint  ^>=1.5.0  || ^>=1.6.0 || ^>=1.7.0 || ^>=1.8.0 || ^>=1.11.0
+    , ghc-exactprint  ^>=1.5.0  || ^>=1.6.0 || ^>=1.7.0 || ^>=1.8.0 || ^>=1.12.0
     , process         >=1.6
     , refact          >=0.2
     , syb             >=0.7.1

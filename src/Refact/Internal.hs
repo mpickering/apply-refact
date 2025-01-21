@@ -72,6 +72,11 @@ import Language.Haskell.GHC.ExactPrint.Types
     -- epRigidity,
     -- Rigidity(..),
 #endif
+#if MIN_VERSION_ghc(9,12,0)
+import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+#else
+import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+#endif
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
