@@ -72,11 +72,11 @@ import Language.Haskell.GHC.ExactPrint.Types
     -- epRigidity,
     -- Rigidity(..),
 #endif
-#if MIN_VERSION_ghc(9,12,0)
-import Language.Haskell.GHC.ExactPrint.Utils (showAst)
-#else
-import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
-#endif
+-- #if MIN_VERSION_ghc(9,12,0)
+-- import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+-- #else
+-- import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+-- #endif
 import Language.Haskell.GHC.ExactPrint.Utils (ss2pos)
 import Refact.Compat
   ( AnnSpan,
@@ -116,9 +116,12 @@ import Refact.Compat
     ann,
 #endif
 
+#if MIN_VERSION_ghc(9,4,0)
     mkGeneratedHsDocString,
-    initParserOpts, AnnConstraint
-
+    initParserOpts,
+#else
+#endif
+    AnnConstraint
   )
 import Refact.Types hiding (SrcSpan)
 import qualified Refact.Types as R
@@ -593,7 +596,7 @@ combineSrcSpansLW :: GHC.SrcSpanAnnA -> GHC.SrcSpanAnnLW -> GHC.SrcSpanAnnLW
 combineSrcSpansLW (GHC.EpAnn anca _ csa) (GHC.EpAnn ancb anb csb)
     = GHC.EpAnn (anca <> ancb) anb (csa <> csb)
 #else
-combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a 
+combineSrcSpansLW :: Semigroup a => GHC.SrcAnn a -> GHC.SrcAnn a -> GHC.SrcAnn a
 combineSrcSpansLW = combineSrcSpansA
 #endif
 
