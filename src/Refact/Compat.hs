@@ -189,11 +189,11 @@ onError s = pprPanic s . vcat . ppp
 
 ppp :: Errors -> [SDoc]
 #if MIN_VERSION_ghc(9,6,0)
-ppp pst = concatMap unDecorated $ fmap ((diagnosticMessage (defaultDiagnosticOpts @GhcMessage)) . errMsgDiagnostic) $ bagToList $ getMessages pst
+ppp = concatMap (unDecorated . diagnosticMessage (defaultDiagnosticOpts @GhcMessage) . errMsgDiagnostic) . bagToList . getMessages
 #elif MIN_VERSION_ghc(9,4,0)
-ppp pst = concatMap unDecorated $ fmap (diagnosticMessage . errMsgDiagnostic) $ bagToList $ getMessages pst
+ppp = concatMap (unDecorated . diagnosticMessage . errMsgDiagnostic) . bagToList . getMessages
 #else
-ppp pst = concatMap unDecorated (errMsgDiagnostic <$> bagToList pst)
+ppp = concatMap (unDecorated . errMsgDiagnostic) . bagToList
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
