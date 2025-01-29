@@ -105,7 +105,7 @@ executable refactor
   default-language:   Haskell2010
   ghc-options:        -Wall -fno-warn-unused-do-bind
   build-depends:
-    , base
+    , base                  >=4.16     && <5
     , containers
     , data-default
     , directory
@@ -156,10 +156,11 @@ test-suite test
     Refact.Run
     Refact.Utils
 
+  autogen-modules:    Paths_apply_refact
   ghc-options:        -threaded
   default-language:   Haskell2010
   build-depends:
-    , base
+    , base                    >=4.16 && <5
     , containers
     , directory
     , extra
