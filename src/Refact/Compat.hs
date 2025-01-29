@@ -130,7 +130,7 @@ import GHC.Driver.Session hiding (initDynFlags)
 #if MIN_VERSION_ghc(9,6,0)
 import GHC.Hs hiding (Pat, Stmt, parseModuleName, ann)
 #else
-import GHC.Hs hiding (Pat, Stmt)
+import GHC.Hs hiding (Pat, Stmt, ann)
 #endif
 import GHC.Parser.Header (getOptions)
 #if MIN_VERSION_ghc(9,8,0)
@@ -301,8 +301,10 @@ commentSrcSpan :: GHC.LEpaComment -> SrcSpan
 #if MIN_VERSION_ghc(9,12,0)
 commentSrcSpan (GHC.L (GHC.EpaSpan l) _) = l
 commentSrcSpan (GHC.L (GHC.EpaDelta l _ _) _) = l
-#else
+#elif MIN_VERSION_ghc(9,4,0)
 commentSrcSpan (GHC.L (GHC.Anchor l _) _) = GHC.RealSrcSpan l Strict.Nothing
+#else
+commentSrcSpan (GHC.L (GHC.Anchor l _) _) = GHC.RealSrcSpan l Nothing
 #endif
 
 #if MIN_VERSION_ghc(9,12,0)
