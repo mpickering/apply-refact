@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -39,7 +40,7 @@ import Data.Data
 import Data.Generics (everywhere, mkT)
 import Data.Typeable
 import qualified GHC
-import Language.Haskell.GHC.ExactPrint
+import Language.Haskell.GHC.ExactPrint hiding (transferEntryDP)
 import Refact.Compat
   ( AnnSpan,
     FastString,
@@ -52,9 +53,11 @@ import Refact.Compat
     setSrcSpanFile,
     srcSpanToAnnSpan,
     pattern RealSrcLoc',
-    pattern RealSrcSpan',
+    pattern RealSrcSpan', AnnConstraint,
+    transferEntryDP
   )
 import qualified Refact.Types as R
+
 
 -- Types
 -- type M a = StateT (Anns, AnnKeyMap) IO a
@@ -92,7 +95,7 @@ getAnnSpan = srcSpanToAnnSpan . GHC.getLoc
 --   GHC.Located new ->
 --   M (GHC.Located new)
 modifyAnnKey ::
-  (Data mod, Data t, Data old, Data new, Monoid t, Typeable t) =>
+  (Data mod, Data t, Data old, Data new, AnnConstraint t, Typeable t) =>
   mod ->
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
@@ -118,10 +121,34 @@ modifyAnnKey _m e1 e2 = do
 --        should keep the backquotes, but currently no test case fails because of it.
 handleBackquotes ::
   forall t old new.
-  (Data t, Data old, Data new, Monoid t, Typeable t) =>
+  (Data t, Data old, Data new, AnnConstraint t, Typeable t) =>
   GHC.LocatedAn t old ->
   GHC.LocatedAn t new ->
   GHC.LocatedAn t new
+#if MIN_VERSION_ghc(9,12,0)
+handleBackquotes old new@(GHC.L loc _) =
+  everywhere (mkT update) new
+  where
+    update :: GHC.LHsExpr GHC.GhcPs -> GHC.LHsExpr GHC.GhcPs
+    update (GHC.L l (GHC.HsVar x (GHC.L ln n))) = GHC.L l (GHC.HsVar x (GHC.L ln' n))
+      where
+        ln' =
+          if GHC.locA l == GHC.locA loc
+            then case cast old :: Maybe (GHC.LHsExpr GHC.GhcPs) of
+              Just (GHC.L _ (GHC.HsVar _ (GHC.L (GHC.EpAnn _ ann _) _)))
+                -- scenario 1
+                | GHC.NameAnn (GHC.NameBackquotes _ _) _ _ <- ann ->
+                  case ln of
+                    (GHC.EpAnn a _ cs) -> (GHC.EpAnn a ann cs)
+                -- scenario 2
+                | (GHC.EpAnn a ann' cs) <- ln,
+                  GHC.NameAnn (GHC.NameBackquotes _ _) _ _ <- ann' ->
+                  (GHC.EpAnn a ann cs)
+              Just _ -> ln
+              Nothing -> ln
+            else ln
+    update x = x
+#else
 handleBackquotes old new@(GHC.L loc _) =
   everywhere (mkT update) new
   where
@@ -146,6 +173,7 @@ handleBackquotes old new@(GHC.L loc _) =
               Nothing -> ln
             else ln
     update x = x
+#endif
 
 -- | Convert a @Refact.Types.SrcSpan@ to a @SrcLoc.SrcSpan@
 toGhcSrcSpan :: FilePath -> R.SrcSpan -> GHC.SrcSpan

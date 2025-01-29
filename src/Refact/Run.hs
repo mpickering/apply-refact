@@ -1,3 +1,4 @@
+{-# LANGUAGE CPP #-}
 {-# LANGUAGE RecordWildCards #-}
 
 module Refact.Run (refactMain, runPipe) where
@@ -7,7 +8,11 @@ import Data.List hiding (find)
 import Data.Maybe
 import Data.Version
 import Debug.Trace
+#if MIN_VERSION_ghc(9,12,0)
+import Language.Haskell.GHC.ExactPrint.Utils (showAst)
+#else
 import Language.Haskell.GHC.ExactPrint.ExactPrint (showAst)
+#endif
 import qualified GHC.Paths
 import Options.Applicative
 import Paths_apply_refact
