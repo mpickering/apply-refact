@@ -290,6 +290,7 @@ type DoGenReplacement an ast a =
 
 type ReplaceWorker a mod =
   (Data a, Data mod) =>
+  DynFlags ->
   mod ->
   Parser (GHC.LocatedA a) ->
   Int ->

@@ -10,6 +10,7 @@ import Control.Monad (unless)
 import Data.List (intercalate)
 import Refact.Compat (Module)
 import Refact.Fixity (applyFixities)
+import GHC (DynFlags)
 import Refact.Internal
 import Refact.Types (Refactoring, SrcSpan)
 
@@ -43,13 +44,15 @@ applyRefactorings ::
 applyRefactorings libdir optionsPos inp file exts = do
   let (enabled, disabled, invalid) = parseExtensions exts
   unless (null invalid) . fail $ "Unsupported extensions: " ++ intercalate ", " invalid
-  m <-
-    either (onError "apply") applyFixities
+  (dfs, m) <-
+    either (onError "apply") pure
       =<< parseModuleWithArgs libdir (enabled, disabled) file
-  apply optionsPos False ((mempty,) <$> inp) (Just file) Silent m
+  m' <- applyFixities m
+  apply dfs optionsPos False ((mempty,) <$> inp) (Just file) Silent m'
 
 -- | Like 'applyRefactorings', but takes a parsed module rather than a file path to parse.
 applyRefactorings' ::
+  DynFlags ->
   Maybe (Int, Int) ->
   [[Refactoring SrcSpan]] ->
   -- | ghc-exactprint AST annotations. This can be obtained from
@@ -58,4 +61,5 @@ applyRefactorings' ::
   -- | Parsed module
   Module ->
   IO String
-applyRefactorings' optionsPos inp = apply optionsPos False ((mempty,) <$> inp) Nothing Silent
+applyRefactorings' dfs optionsPos inp m0 =
+  apply dfs optionsPos False ((mempty,) <$> inp) Nothing Silent m0

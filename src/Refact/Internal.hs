@@ -154,6 +154,7 @@ refactOptions = stringOptions {epRigidity = RigidLayout}
 
 -- | Apply a set of refactorings as supplied by hlint
 apply ::
+  GHC.DynFlags ->
   Maybe (Int, Int) ->
   Bool ->
   [(String, [Refactoring R.SrcSpan])] ->
@@ -162,7 +163,7 @@ apply ::
   -- Anns ->
   Module ->
   IO String
-apply mpos step inp mbfile verb m0 = do
+apply dfs mpos step inp mbfile verb m0 = do
   toGhcSS <-
     maybe
       ( case GHC.getLoc m0 of
@@ -193,8 +194,8 @@ apply mpos step inp mbfile verb m0 = do
 
   m <-
     if step
-      then fromMaybe m0 <$> runMaybeT (refactoringLoop m0 allRefacts)
-      else evalStateT (runRefactorings verb m0 (first snd <$> allRefacts)) 0
+      then fromMaybe m0 <$> runMaybeT (refactoringLoop dfs m0 allRefacts)
+      else evalStateT (runRefactorings verb dfs m0 (first snd <$> allRefacts)) 0
 
   -- liftIO $ putStrLn $ "apply:final AST\n" ++ showAst m
   pure . snd . runIdentity $ exactPrintWithOptions refactOptions m
@@ -220,27 +221,29 @@ aggregateSrcSpans = \case
 
 runRefactorings ::
   Verbosity ->
+  GHC.DynFlags ->
   Module ->
   [([Refactoring GHC.SrcSpan], R.SrcSpan)] ->
   StateT Int IO Module
-runRefactorings verb m0 ((rs, ss) : rest) = do
-  runRefactorings' verb m0 rs >>= \case
-    Nothing -> runRefactorings verb m0 rest
+runRefactorings verb dfs m0 ((rs, ss) : rest) = do
+  runRefactorings' verb dfs m0 rs >>= \case
+    Nothing -> runRefactorings verb dfs m0 rest
     Just m -> do
       let (overlaps, rest') = span (overlap ss . snd) rest
       when (verb >= Normal) . for_ overlaps $ \(rs', _) ->
         traceM $ "Ignoring " ++ show rs' ++ " due to overlap."
-      runRefactorings verb m rest'
-runRefactorings _ m [] = pure m
+      runRefactorings verb dfs m rest'
+runRefactorings _ _ m [] = pure m
 
 runRefactorings' ::
   Verbosity ->
+  GHC.DynFlags ->
   Module ->
   [Refactoring GHC.SrcSpan] ->
   StateT Int IO (Maybe Module)
-runRefactorings' verb m0 rs = do
+runRefactorings' verb dfs m0 rs = do
   seed <- get
-  m <- foldlM runRefactoring m0 rs
+  m <- foldlM (runRefactoring dfs) m0 rs
   if droppedComments rs m0 m
     then do
       put seed
@@ -264,39 +267,40 @@ data LoopOption = LoopOption
   }
 
 refactoringLoop ::
+  GHC.DynFlags ->
   Module ->
   [((String, [Refactoring GHC.SrcSpan]), R.SrcSpan)] ->
   MaybeT IO Module
-refactoringLoop m [] = pure m
-refactoringLoop m (((_, []), _) : rs) = refactoringLoop m rs
-refactoringLoop m0 hints@(((hintDesc, rs), ss) : rss) = do
-  res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent m0 rs
+refactoringLoop _ m [] = pure m
+refactoringLoop dfs m (((_, []), _) : rs) = refactoringLoop dfs m rs
+refactoringLoop dfs m0 hints@(((hintDesc, rs), ss) : rss) = do
+  res <- liftIO . flip evalStateT 0 $ runRefactorings' Silent dfs m0 rs
   let yAction :: MaybeT IO Module
       yAction = case res of
         Just m -> do
           exactPrint m `seq` pure ()
-          refactoringLoop m $ dropWhile (overlap ss . snd) rss
+          refactoringLoop dfs m $ dropWhile (overlap ss . snd) rss
         Nothing -> do
           liftIO $ putStrLn "Hint skipped since applying it would cause comments to be dropped"
-          refactoringLoop m0 rss
+          refactoringLoop dfs m0 rss
       opts :: [(String, LoopOption)]
       opts =
         [ ("y", LoopOption "Apply current hint" yAction),
-          ("n", LoopOption "Don't apply the current hint" (refactoringLoop m0 rss)),
+          ("n", LoopOption "Don't apply the current hint" (refactoringLoop dfs m0 rss)),
           ("q", LoopOption "Apply no further hints" (pure m0)),
           ("d", LoopOption "Discard previous changes" mzero),
           ( "v",
             LoopOption
               "View current file"
               ( liftIO (putStrLn (exactPrint m0))
-                  >> refactoringLoop m0 hints
+                  >> refactoringLoop dfs m0 hints
               )
           ),
           ("?", LoopOption "Show this help menu" loopHelp)
         ]
       loopHelp = do
         liftIO . putStrLn . unlines . map mkLine $ opts
-        refactoringLoop m0 hints
+        refactoringLoop dfs m0 hints
       mkLine (c, opt) = c ++ " - " ++ desc opt
   inp <- liftIO $ do
     putStrLn hintDesc
@@ -314,22 +318,23 @@ data Verbosity = Silent | Normal | Loud deriving (Eq, Show, Ord)
 -- | Peform a @Refactoring@.
 runRefactoring ::
   Data a =>
+  GHC.DynFlags ->
   a ->
   Refactoring GHC.SrcSpan ->
   StateT Int IO a
-runRefactoring m = \case
+runRefactoring dfs m = \case
   r@Replace {} -> do
     seed <- get <* modify (+ 1)
     liftIO $ case rtype r of
-      Expr -> replaceWorker m parseExpr seed r
-      Decl -> replaceWorker m parseDecl seed r
-      Type -> replaceWorker m parseType seed r
-      Pattern -> replaceWorker m parsePattern seed r
-      Stmt -> replaceWorker m parseStmt seed r
-      Bind -> replaceWorker m parseBind seed r
-      R.Match -> replaceWorker m parseMatch seed r
-      ModuleName -> replaceWorker m (parseModuleName (pos r)) seed r
-      Import -> replaceWorker m parseImport seed r
+      Expr -> replaceWorker dfs m parseExpr seed r
+      Decl -> replaceWorker dfs m parseDecl seed r
+      Type -> replaceWorker dfs m parseType seed r
+      Pattern -> replaceWorker dfs m parsePattern seed r
+      Stmt -> replaceWorker dfs m parseStmt seed r
+      Bind -> replaceWorker dfs m parseBind seed r
+      R.Match -> replaceWorker dfs m parseMatch seed r
+      ModuleName -> replaceWorker dfs m (parseModuleName (pos r)) seed r
+      Import -> replaceWorker dfs m parseImport seed r
   ModifyComment {..} -> pure (modifyComment pos newComment m)
   Delete {rtype, pos} -> pure (f m)
     where
@@ -656,14 +661,11 @@ setLocalBind newLocalBinds xvald origBind newLoc origMG locMG origMatch locMatch
     newBind = origBind {GHC.fun_matches = newMG}
 
 replaceWorker :: forall a mod. (ExactPrint a) => ReplaceWorker a mod
-replaceWorker m parser seed Replace {..} = do
+replaceWorker dfs m parser seed Replace {..} = do
   let replExprLocation = srcSpanToAnnSpan pos
       uniqueName = "template" ++ show seed
-  let libdir = undefined
 
-  template <- do
-    flags <- maybe (withDynFlags libdir id) pure =<< readIORef dynFlagsRef
-    either (onError "replaceWorker") pure $ parser flags uniqueName orig
+  template <- either (onError "replaceWorker") pure $ parser dfs uniqueName orig
 
   (newExpr, ()) <-
     runStateT
@@ -715,7 +717,7 @@ replaceWorker m parser seed Replace {..} = do
       pure (ensureSpace finalM)
     -- Failed to find a replacment so don't make any changes
     _ -> pure m
-replaceWorker m _ _ _ = pure m
+replaceWorker _ m _ _ _ = pure m
 
 manchorOp :: GHC.EpAnn ann -> Maybe GHC.DeltaPos
 #if MIN_VERSION_ghc(9,12,0)
@@ -844,7 +846,7 @@ parseModuleWithArgs ::
   LibDir ->
   ([Extension], [Extension]) ->
   FilePath ->
-  IO (Either Errors GHC.ParsedSource)
+  IO (Either Errors (GHC.DynFlags, GHC.ParsedSource))
 parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
   initFlags <- initDynFlags fp
   eflags <- liftIO $ addExtensionsToFlags es ds fp initFlags
@@ -852,13 +854,12 @@ parseModuleWithArgs libdir (es, ds) fp = ghcWrapper libdir $ do
     -- TODO: report error properly.
     Left err -> pure . Left $ mkErr initFlags GHC.noSrcSpan err
     Right flags -> do
-      liftIO $ writeIORef' dynFlagsRef (Just flags)
       res <- parseModuleEpAnnsWithCppInternal defaultCppOptions flags fp
 
       -- pure $ postParseTransform res rigidLayout
       case postParseTransform res of
         Left e -> pure (Left e)
-        Right ast -> pure $ Right (makeDeltaAst ast)
+        Right ast -> pure $ Right (flags, makeDeltaAst ast)
 
 -- | Parse the input into (enabled extensions, disabled extensions, invalid input).
 -- Implied extensions are automatically added. For example, @FunctionalDependencies@
@@ -893,9 +894,3 @@ parseExtensions = addImplied . foldl' f mempty
 
 readExtension :: String -> Maybe Extension
 readExtension s = flagSpecFlag <$> find ((== s) . flagSpecName) xFlags
-
--- TODO: This is added to avoid a breaking change. We should remove it and
--- directly pass the `DynFlags` as arguments, before the 0.10 release.
-dynFlagsRef :: IORef (Maybe GHC.DynFlags)
-dynFlagsRef = unsafePerformIO $ newIORef Nothing
-{-# NOINLINE dynFlagsRef #-}
